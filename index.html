@@ -775,7 +775,7 @@ function render(){
 loadAll();
 </script>
 
-<div id="self-root" style="display:none;font-family:'Hiragino Kaku Gothic Pro','Meiryo',sans-serif;min-height:100vh;padding:12px;background:#fef9c3">
+<div id="self-root" style="display:none">
 <div class="wrap">
 <div id="toast" class="toast"></div>
 <div id="app">
@@ -790,14 +790,14 @@ loadAll();
 </div>
 <script>
 (function(){
-  var isSelf = location.search.indexOf('self') >= 0 || location.hash.indexOf('self') >= 0;
+  var isSelf=location.search.indexOf("self")>=0||location.hash.indexOf("self")>=0;
   if(isSelf){
-    document.getElementById('app').style.display='none';
-    var selfRoot = document.getElementById('self-root');
-    selfRoot.style.display='block';
-    document.body.style.background='#fef9c3';
-    var styleEl = document.getElementById('self-style');
-    if(styleEl) styleEl.removeAttribute('disabled');
+    document.getElementById("app").style.display="none";
+    var r=document.getElementById("self-root");
+    r.style.display="block";
+    document.body.style.background="#fef9c3";
+    var s=document.getElementById("self-style");
+    if(s)s.removeAttribute("disabled");
 
 const URL_='https://zssovpegksskkgrkzbds.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc292cGVna3Nza2tncmt6YmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMDQ0MDUsImV4cCI6MjA5MDY4MDQwNX0.lSjNnhYePMJELZYVkLoEMK-B_k4LHnCmZeKkJxSQpXc';
