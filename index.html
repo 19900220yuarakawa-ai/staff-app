@@ -799,9 +799,7 @@ loadAll();
     var s=document.getElementById("self-style");
     if(s)s.removeAttribute("disabled");
 
-const URL_='https://zssovpegksskkgrkzbds.supabase.co';
-const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc292cGVna3Nza2tncmt6YmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMDQ0MDUsImV4cCI6MjA5MDY4MDQwNX0.lSjNnhYePMJELZYVkLoEMK-B_k4LHnCmZeKkJxSQpXc';
-const sb=supabase.createClient(URL_,KEY);
+// Supabaseクライアントは管理画面のsbを再利用
 
 function toast(msg,err=false){
   const t=document.getElementById('toast');
