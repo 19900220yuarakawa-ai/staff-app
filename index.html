@@ -11,6 +11,8 @@
 const SURL='https://zssovpegksskkgrkzbds.supabase.co';
 const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc292cGVna3Nza2tncmt6YmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMDQ0MDUsImV4cCI6MjA5MDY4MDQwNX0.lSjNnhYePMJELZYVkLoEMK-B_k4LHnCmZeKkJxSQpXc';
 const IS_SELF=location.search.includes('self');
+var S,loadAll,saveEval,deleteEval,startEdit,applyMember,addStore,delStore,addMember,delMember,addPeriod,delPeriod,addTrait,delTrait,addSection,delSection,addItem,delItem,updateRank,copyUrl,requirePass,adminUnlocked,emptyVals,calcScore,rankOf;
+var mId,pId,sId,vals,selT,step,res,load,submit,reset,D,render,calcSc,emptyV,rankOf2,rankMsg,showToast2;
 const sb=supabase.createClient(SURL,SKEY,{auth:{storageKey:IS_SELF?'self-auth':'manager-auth',autoRefreshToken:false,persistSession:false}});
 
 function addStyle(css){const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);}
@@ -26,7 +28,7 @@ if(IS_SELF){
   let D={members:[],periods:[],sections:[],items:[],rankSettings:[],traits:[]};
   let mId='',pId='',sId='',vals={},selT=[],step='form',res=null;
 
-  function rankOf(sc){const s=[...D.rankSettings].sort((a,b)=>b.min_score-a.min_score);for(const r of s){if(sc>=r.min_score)return r;}return s[s.length-1]||{rank:'D',pay_up:0};}
+  rankOf=function(sc){const s=[...D.rankSettings].sort((a,b)=>b.min_score-a.min_score);for(const r of s){if(sc>=r.min_score)return r;}return s[s.length-1]||{rank:'D',pay_up:0};}
   function rankMsg(r){return{SS:'完璧です！最高です！🎉',S:'すごい！Sランク達成！✨','A+':'あと少しでSランク！',A:'良い調子です！',B:'まだまだ伸びしろあり！',C:'一つずつ改善しよう！',D:'基礎から頑張ろう！'}[r]||'お疲れ様でした！';}
   function calcSc(){return Object.values(vals).reduce((s,v)=>s+Number(v||0),0);}
   function emptyV(){const o={};D.items.forEach(it=>{o[it.id]=0});return o;}
@@ -62,7 +64,7 @@ if(IS_SELF){
 
   function reset(){mId='';pId='';sId='';vals=emptyV();selT=[];step='form';res=null;render();}
 
-  function render(){
+  render=function(){
     const app=document.getElementById('app');
     if(step==='done'&&res){
       const bg=rankBg(res.rank);
@@ -83,16 +85,16 @@ if(IS_SELF){
   addStyle(`*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}body{font-family:'Hiragino Kaku Gothic Pro','Meiryo',sans-serif;background:#EFF6FF;min-height:100vh;padding:10px}.card{background:#fff;border:2.5px solid #1e293b;border-radius:20px;overflow:hidden;margin-bottom:12px;box-shadow:0 4px 0 #1e293b}.card-header{background:linear-gradient(90deg,#fef08a,#bfdbfe);border-bottom:2.5px solid #1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}.stat-box{background:#fff;border:2px solid #1e293b;border-radius:12px;padding:6px 12px;text-align:center;min-width:60px}.stat-box .num{font-size:20px;font-weight:900;color:#0f172a}.stat-box .lbl{font-size:10px;font-weight:700;color:#64748b}.tabs{display:flex;gap:3px;padding:6px;background:#f8fafc;overflow-x:auto;-webkit-overflow-scrolling:touch}.tabs::-webkit-scrollbar{display:none}.tab{flex-shrink:0;border:2px solid #cbd5e1;border-radius:12px;padding:8px 12px;font-weight:900;font-size:12px;cursor:pointer;background:#fff;color:#64748b;white-space:nowrap}.tab.active{background:#fde047;border-color:#1e293b;box-shadow:0 3px 0 #1e293b;color:#0f172a}.section-block{border:2px solid #1e293b;border-radius:14px;padding:12px;margin-bottom:8px}.item-row{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:5px}.item-row .item-label{flex:1;font-size:13px;font-weight:700;line-height:1.4}select,input{border:2px solid #1e293b;border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px;background:#fff;color:#0f172a;width:100%;font-family:inherit;-webkit-appearance:none}.btn{border:2px solid #1e293b;border-radius:12px;padding:10px 18px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit}.btn-primary{background:#fde047;color:#0f172a;box-shadow:0 3px 0 #1e293b}.btn-ghost{background:#fff;color:#0f172a}.btn-danger{background:#fff;color:#dc2626;border-color:#fca5a5}.btn-sm{padding:7px 12px;font-size:12px}.rank-badge{width:52px;height:52px;border-radius:50%;border:3px solid #1e293b;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;flex-shrink:0}.ev-card{background:#fff;border:2px solid #1e293b;border-radius:16px;overflow:hidden;margin-bottom:10px;box-shadow:0 3px 0 #1e293b}.ev-header{border-bottom:2px solid #1e293b;padding:10px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.trait-btn{border:2px solid #94a3b8;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;background:#fff;color:#64748b}.trait-btn.on{border-color:#1e293b;background:#fef08a;color:#0f172a}.progress{height:6px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:2px}.progress-fill{height:100%;background:#3b82f6;border-radius:4px;transition:width .3s}.info-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0;color:#0f172a}.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 24px;border-radius:14px;font-weight:700;font-size:14px;z-index:999;opacity:0;transition:opacity .3s;white-space:nowrap;max-width:90vw}.toast.show{opacity:1}.settings-panel{background:#fff;border:2px solid #1e293b;border-radius:14px;padding:14px;margin-bottom:12px}.settings-panel h3{font-size:14px;font-weight:900;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}.master-row{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin-bottom:5px}.rulebook{background:linear-gradient(135deg,#fef9c3,#dbeafe);border:2px solid #1e293b;border-radius:14px;padding:14px;margin-bottom:12px}.rule-block{background:#fff;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:8px}.rule-block h4{font-size:11px;font-weight:900;color:#475569;margin-bottom:5px}.self-link-box{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:2px solid #059669;border-radius:14px;padding:14px;margin-bottom:12px}.section-card{border:2px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:8px}.section-card-header{padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:900;font-size:13px}.section-card-body{padding:10px 12px;background:#fff}.eval-item-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:8px;margin-bottom:4px;background:#f8fafc}.rank-row{display:flex;align-items:center;gap:8px;border:2px solid #1e293b;border-radius:12px;padding:10px 12px;margin-bottom:7px;flex-wrap:wrap}@media(min-width:700px){.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}}@media(min-width:900px){.form-layout{display:grid;grid-template-columns:1fr 280px;gap:14px}}`);
   document.body.innerHTML='<div id="toast" class="toast"></div><div id="app"></div>';
 
-  const ADMIN_PASS='2315';let adminUnlocked=false;
-  function requirePass(tab){const LOCKED=['settings','items','ranks'];if(!LOCKED.includes(tab))return true;if(adminUnlocked)return true;const p=prompt('🔒 管理者パスワードを入力してください');if(p===ADMIN_PASS){adminUnlocked=true;return true;}if(p!==null)showToast('パスワードが違います',true);return false;}
+  adminUnlocked=false;const ADMIN_PASS='2315';
+  requirePass=function(tab){const LOCKED=['settings','items','ranks'];if(!LOCKED.includes(tab))return true;if(adminUnlocked)return true;const p=prompt('🔒 管理者パスワードを入力してください');if(p===ADMIN_PASS){adminUnlocked=true;return true;}if(p!==null)showToast('パスワードが違います',true);return false;}
 
-  let S={tab:'list',loading:true,stores:[],periods:[],members:[],traits:[],evals:[],sections:[],items:[],rankSettings:[],search:'',storeF:'all',listFilter:'all',editId:null,form:{memberId:'',storeId:'',periodId:'',evaluator:'',vals:{},selTraits:[],good:'',improve:'',goal:''},newStore:'',newMemberName:'',newMemberStore:'',newPeriod:'',newTrait:'',newTraitScore:2,newSectionName:'',newSectionColor:'#dbeafe',newItemSectionId:'',newItemLabel:''};
+  S={tab:'list',loading:true,stores:[],periods:[],members:[],traits:[],evals:[],sections:[],items:[],rankSettings:[],search:'',storeF:'all',listFilter:'all',editId:null,form:{memberId:'',storeId:'',periodId:'',evaluator:'',vals:{},selTraits:[],good:'',improve:'',goal:''},newStore:'',newMemberName:'',newMemberStore:'',newPeriod:'',newTrait:'',newTraitScore:2,newSectionName:'',newSectionColor:'#dbeafe',newItemSectionId:'',newItemLabel:''};
 
-  function emptyVals(){const o={};(S.items||[]).forEach(it=>{o[it.id]=0});return o;}
-  function calcScore(vals){return Object.values(vals||{}).reduce((s,v)=>s+Number(v||0),0);}
-  function rankOf(score){const sorted=[...S.rankSettings].sort((a,b)=>b.min_score-a.min_score);for(const r of sorted){if(score>=r.min_score)return r;}return sorted[sorted.length-1]||{rank:'D',pay_up:0};}
+  emptyVals=function(){const o={};(S.items||[]).forEach(it=>{o[it.id]=0});return o;}
+  calcScore=function(vals){return Object.values(vals||{}).reduce((s,v)=>s+Number(v||0),0);}
+  rankOf=function(score){const sorted=[...S.rankSettings].sort((a,b)=>b.min_score-a.min_score);for(const r of sorted){if(score>=r.min_score)return r;}return sorted[sorted.length-1]||{rank:'D',pay_up:0};}
 
-  async function loadAll(){
+  loadAll=async function(){
     S.loading=true;render();
     try{
       const[st,pe,me,tr,ev,sec,it,rs]=await Promise.all([
@@ -111,7 +113,7 @@ if(IS_SELF){
     S.loading=false;render();
   }
 
-  async function saveEval(){
+  saveEval=async function(){
     const f=S.form;if(!f.memberId||!f.storeId||!f.periodId){showToast('スタッフ・店舗・評価期間を選んでください',true);return;}
     const base=calcScore(f.vals);const rObj=rankOf(base);const tScore=f.selTraits.reduce((s,t)=>s+(S.traits.find(o=>o.name===t)?.score||0),0);
     const row={staff_member_id:f.memberId,store_id:f.storeId,period_id:f.periodId,evaluation_type:'manager',evaluator_name:f.evaluator,base_score:base,trait_score:tScore,total_score:base+tScore,rank:rObj.rank,pay_delta:rObj.pay_up,good_point:f.good,improve_point:f.improve,next_goal:f.goal};
@@ -126,25 +128,25 @@ if(IS_SELF){
     }catch(e){showToast('保存エラー: '+e.message,true);}
   }
 
-  async function deleteEval(id){if(!confirm('この評価を削除しますか？'))return;await sb.from('evaluations').delete().eq('id',id);showToast('削除しました');await loadAll();}
-  function startEdit(id){const ev=S.evals.find(e=>e.id===id);if(!ev)return;const vals=emptyVals();(ev.evaluation_item_scores||[]).forEach(r=>{if(r.item_key&&vals.hasOwnProperty(r.item_key))vals[r.item_key]=Number(r.score||0);});S.form={memberId:ev.staff_member_id,storeId:ev.store_id,periodId:ev.period_id,evaluator:ev.evaluator_name||'',vals,selTraits:(ev.evaluation_traits||[]).map(t=>t.trait_name),good:ev.good_point||'',improve:ev.improve_point||'',goal:ev.next_goal||''};S.editId=ev.id;S.tab='new';render();}
-  function applyMember(id){const m=S.members.find(x=>x.id===id);if(!m)return;S.form={...S.form,memberId:m.id,storeId:m.store_id};render();}
-  async function addStore(){const n=S.newStore.trim();if(!n)return;await sb.from('stores').insert({name:n});S.newStore='';showToast('追加しました');await loadAll();}
-  async function delStore(id){if(!confirm('削除しますか？'))return;await sb.from('stores').delete().eq('id',id);showToast('削除しました');await loadAll();}
-  async function addMember(){const n=S.newMemberName.trim(),sid=S.newMemberStore;if(!n||!sid){showToast('名前と店舗を入力してください',true);return;}await sb.from('staff_members').insert({name:n,store_id:sid,active:true});S.newMemberName='';showToast('追加しました');await loadAll();}
-  async function delMember(id){if(!confirm('削除しますか？'))return;await sb.from('staff_members').update({active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  async function addPeriod(){const l=S.newPeriod.trim();if(!l)return;await sb.from('evaluation_periods').insert({label:l,is_open:true});S.newPeriod='';showToast('追加しました');await loadAll();}
-  async function delPeriod(id){if(!confirm('削除しますか？'))return;await sb.from('evaluation_periods').update({is_open:false}).eq('id',id);showToast('非表示にしました');await loadAll();}
-  async function addTrait(){const n=S.newTrait.trim();if(!n)return;const mx=Math.max(0,...S.traits.map(t=>t.sort_order||0));await sb.from('trait_options').insert({name:n,score:Number(S.newTraitScore||0),sort_order:mx+1,is_active:true});S.newTrait='';showToast('追加しました');await loadAll();}
-  async function delTrait(id){if(!confirm('削除しますか？'))return;await sb.from('trait_options').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  async function addSection(){const n=S.newSectionName.trim();if(!n)return;const mx=Math.max(0,...S.sections.map(s=>s.sort_order||0));await sb.from('eval_sections').insert({name:n,color:S.newSectionColor,sort_order:mx+1,is_active:true});S.newSectionName='';showToast('追加しました');await loadAll();}
-  async function delSection(id){if(!confirm('このセクションと項目をすべて削除しますか？'))return;await sb.from('eval_sections').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  async function addItem(){const l=S.newItemLabel.trim(),sid=S.newItemSectionId;if(!l||!sid){showToast('セクションと項目名を入力してください',true);return;}const mx=Math.max(0,...S.items.filter(i=>i.section_id===sid).map(i=>i.sort_order||0));await sb.from('eval_items').insert({section_id:sid,label:l,sort_order:mx+1,is_active:true});S.newItemLabel='';showToast('追加しました');await loadAll();}
-  async function delItem(id){if(!confirm('削除しますか？'))return;await sb.from('eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  async function updateRank(id,field,val){await sb.from('rank_settings').update({[field]:Number(val)}).eq('id',id);await loadAll();}
-  function copyUrl(){const url=location.origin+location.pathname+'?self';navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>prompt('スタッフ自己採点URL:',url));}
+  deleteEval=async function(id){if(!confirm('この評価を削除しますか？'))return;await sb.from('evaluations').delete().eq('id',id);showToast('削除しました');await loadAll();}
+  startEdit=function(id){const ev=S.evals.find(e=>e.id===id);if(!ev)return;const vals=emptyVals();(ev.evaluation_item_scores||[]).forEach(r=>{if(r.item_key&&vals.hasOwnProperty(r.item_key))vals[r.item_key]=Number(r.score||0);});S.form={memberId:ev.staff_member_id,storeId:ev.store_id,periodId:ev.period_id,evaluator:ev.evaluator_name||'',vals,selTraits:(ev.evaluation_traits||[]).map(t=>t.trait_name),good:ev.good_point||'',improve:ev.improve_point||'',goal:ev.next_goal||''};S.editId=ev.id;S.tab='new';render();}
+  applyMember=function(id){const m=S.members.find(x=>x.id===id);if(!m)return;S.form={...S.form,memberId:m.id,storeId:m.store_id};render();}
+  addStore=async function(){const n=S.newStore.trim();if(!n)return;await sb.from('stores').insert({name:n});S.newStore='';showToast('追加しました');await loadAll();}
+  delStore=async function(id){if(!confirm('削除しますか？'))return;await sb.from('stores').delete().eq('id',id);showToast('削除しました');await loadAll();}
+  addMember=async function(){const n=S.newMemberName.trim(),sid=S.newMemberStore;if(!n||!sid){showToast('名前と店舗を入力してください',true);return;}await sb.from('staff_members').insert({name:n,store_id:sid,active:true});S.newMemberName='';showToast('追加しました');await loadAll();}
+  delMember=async function(id){if(!confirm('削除しますか？'))return;await sb.from('staff_members').update({active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+  addPeriod=async function(){const l=S.newPeriod.trim();if(!l)return;await sb.from('evaluation_periods').insert({label:l,is_open:true});S.newPeriod='';showToast('追加しました');await loadAll();}
+  delPeriod=async function(id){if(!confirm('削除しますか？'))return;await sb.from('evaluation_periods').update({is_open:false}).eq('id',id);showToast('非表示にしました');await loadAll();}
+  addTrait=async function(){const n=S.newTrait.trim();if(!n)return;const mx=Math.max(0,...S.traits.map(t=>t.sort_order||0));await sb.from('trait_options').insert({name:n,score:Number(S.newTraitScore||0),sort_order:mx+1,is_active:true});S.newTrait='';showToast('追加しました');await loadAll();}
+  delTrait=async function(id){if(!confirm('削除しますか？'))return;await sb.from('trait_options').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+  addSection=async function(){const n=S.newSectionName.trim();if(!n)return;const mx=Math.max(0,...S.sections.map(s=>s.sort_order||0));await sb.from('eval_sections').insert({name:n,color:S.newSectionColor,sort_order:mx+1,is_active:true});S.newSectionName='';showToast('追加しました');await loadAll();}
+  delSection=async function(id){if(!confirm('このセクションと項目をすべて削除しますか？'))return;await sb.from('eval_sections').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+  addItem=async function(){const l=S.newItemLabel.trim(),sid=S.newItemSectionId;if(!l||!sid){showToast('セクションと項目名を入力してください',true);return;}const mx=Math.max(0,...S.items.filter(i=>i.section_id===sid).map(i=>i.sort_order||0));await sb.from('eval_items').insert({section_id:sid,label:l,sort_order:mx+1,is_active:true});S.newItemLabel='';showToast('追加しました');await loadAll();}
+  delItem=async function(id){if(!confirm('削除しますか？'))return;await sb.from('eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+  updateRank=async function(id,field,val){await sb.from('rank_settings').update({[field]:Number(val)}).eq('id',id);await loadAll();}
+  copyUrl=function(){const url=location.origin+location.pathname+'?self';navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>prompt('スタッフ自己採点URL:',url));}
 
-  function render(){
+  render=function(){
     const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF}=S;
     if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
     const base=calcScore(form.vals);const rObj=rankOf(base);const rank=rObj.rank;
