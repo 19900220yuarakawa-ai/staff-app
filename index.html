@@ -239,9 +239,8 @@ render=function(){
   if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
 
   const base=calcScore(form.vals);
-  const rObj=rankOf(base);
-  const rank=rObj.rank;
   const tScore=form.selTraits.reduce((s,t)=>s+(traits.find(o=>o.name===t)?.score||0),0);
+  const rObj=rankOf(base+tScore);const rank=rObj.rank;
   const maxScore=items.length*4;
 
   const filtered=evals.filter(e=>{
@@ -439,7 +438,7 @@ render=function(){
         <div style="padding:12px">
           <div style="border:2px solid #1e293b;border-radius:12px;padding:10px;background:${rankBg(rank)};display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <div><div style="font-size:10px;font-weight:900;color:#475569">ランク</div><div style="font-size:36px;font-weight:900">${rank}</div></div>
-            <div style="text-align:right"><div style="font-size:10px;font-weight:900;color:#475569">本評価点</div><div style="font-size:28px;font-weight:900">${base}</div></div>
+            <div style="text-align:right"><div style="font-size:10px;font-weight:900;color:#475569">合計点</div><div style="font-size:28px;font-weight:900">${base+tScore}</div></div>
           </div>
           <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:8px">
             <div class="info-row"><span>特殊能力補正</span><span>${tScore>=0?'+':''}${tScore}</span></div>
