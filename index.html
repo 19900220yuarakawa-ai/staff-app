@@ -69,6 +69,8 @@ function showToast(msg,err=false){
 }
 
 var render;
+var adminUnlocked=false;
+function requirePass(tab){var LOCKED=['settings','items','ranks'];if(!LOCKED.includes(tab))return true;if(adminUnlocked)return true;var p=prompt('🔒 パスワードを入力してください');if(p==='2315'){adminUnlocked=true;return true;}if(p!==null)showToast('パスワードが違います',true);return false;}
 let S={
   tab:'list',loading:true,
   stores:[],periods:[],members:[],traits:[],evals:[],
@@ -295,9 +297,9 @@ render=function(){
       <button class="tab ${tab==='list'?'active':''}" onclick="S.tab='list';render()">📋 一覧</button>
       <button class="tab ${tab==='new'?'active':''}" onclick="S.tab='new';if(!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''}};render()">${editId?'✏️':'＋'} 入力</button>
       <button class="tab ${tab==='compare'?'active':''}" onclick="S.tab='compare';render()">📊 比較</button>
-      <button class="tab ${tab==='settings'?'active':''}" onclick="S.tab='settings';render()">⭐ 能力設定</button>
-      <button class="tab ${tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
-      <button class="tab ${tab==='ranks'?'active':''}" onclick="S.tab='ranks';render()">🏆 ランク</button>
+      <button class="tab ${tab==='settings'?'active':''}" onclick="if(requirePass('settings')){S.tab='settings';render()}">⭐ 能力設定 🔒</button>
+      <button class="tab ${tab==='items'?'active':''}" onclick="if(requirePass('items')){S.tab='items';render()}">📝 評価項目 🔒</button>
+      <button class="tab ${tab==='ranks'?'active':''}" onclick="if(requirePass('ranks')){S.tab='ranks';render()}">🏆 ランク 🔒</button>
       <button class="tab ${tab==='master'?'active':''}" onclick="S.tab='master';render()">⚙️ 基本設定</button>
     </div>
   </div>`;
@@ -799,3 +801,4 @@ loadAll();
 </script>
 </body>
 </html>
+
