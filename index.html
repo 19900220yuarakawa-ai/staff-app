@@ -533,8 +533,10 @@ render=function(){
   // ===== ランク設定 =====
 
   if(tab==='compare'){
-    const mgE=evals.filter(e=>e.evaluation_type==='manager');
-    const sfE=evals.filter(e=>e.evaluation_type==='self');
+    const cmpStoreF=S.cmpStoreF||'all';
+    html+=`<div style="margin-bottom:10px"><select style="width:100%" onchange="S.cmpStoreF=this.value;render()"><option value="all">🏪 全店舗</option>${stores.map(s=>`<option value="${s.id}" ${cmpStoreF===s.id?'selected':''}>${s.name}</option>`).join('')}</select></div>`;
+    const mgE=evals.filter(e=>e.evaluation_type==='manager'&&(cmpStoreF==='all'||e.store_id===cmpStoreF));
+    const sfE=evals.filter(e=>e.evaluation_type==='self'&&(cmpStoreF==='all'||e.store_id===cmpStoreF));
     const pairs=[];
     mgE.forEach(mg=>{const sf=sfE.find(s=>s.staff_member_id===mg.staff_member_id&&s.period_id===mg.period_id);if(sf)pairs.push({mg,sf});});
     html+=`<div style="margin-bottom:10px;font-size:13px;font-weight:700;color:#475569">店長評価と自己採点が両方ある ${pairs.length} 件</div>`;
