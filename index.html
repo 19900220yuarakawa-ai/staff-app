@@ -5,246 +5,584 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>パワフルスタッフ査定アプリ</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Hiragino Kaku Gothic Pro','Meiryo',sans-serif;background:#EFF6FF;min-height:100vh;padding:10px}
+.card{background:#fff;border:2.5px solid #1e293b;border-radius:20px;overflow:hidden;margin-bottom:12px;box-shadow:0 4px 0 #1e293b}
+.card-header{background:linear-gradient(90deg,#fef08a,#bfdbfe);border-bottom:2.5px solid #1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.stat-box{background:#fff;border:2px solid #1e293b;border-radius:12px;padding:6px 12px;text-align:center;min-width:60px}
+.stat-box .num{font-size:20px;font-weight:900;color:#0f172a}
+.stat-box .lbl{font-size:10px;font-weight:700;color:#64748b}
+.tabs{display:flex;gap:3px;padding:6px;background:#f8fafc;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;border:2px solid #cbd5e1;border-radius:12px;padding:8px 12px;font-weight:900;font-size:12px;cursor:pointer;background:#fff;color:#64748b;white-space:nowrap}
+.tab.active{background:#fde047;border-color:#1e293b;box-shadow:0 3px 0 #1e293b;color:#0f172a}
+.section-block{border:2px solid #1e293b;border-radius:14px;padding:12px;margin-bottom:8px}
+.item-row{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:5px}
+.item-row .item-label{flex:1;font-size:13px;font-weight:700;line-height:1.4}
+select,input{border:2px solid #1e293b;border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px;background:#fff;color:#0f172a;width:100%;font-family:inherit;-webkit-appearance:none}
+.btn{border:2px solid #1e293b;border-radius:12px;padding:10px 18px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;-webkit-appearance:none}
+.btn-primary{background:#fde047;color:#0f172a;box-shadow:0 3px 0 #1e293b}
+.btn-ghost{background:#fff;color:#0f172a}
+.btn-danger{background:#fff;color:#dc2626;border-color:#fca5a5}
+.btn-sm{padding:7px 12px;font-size:12px}
+.rank-badge{width:52px;height:52px;border-radius:50%;border:3px solid #1e293b;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;flex-shrink:0}
+.ev-card{background:#fff;border:2px solid #1e293b;border-radius:16px;overflow:hidden;margin-bottom:10px;box-shadow:0 3px 0 #1e293b}
+.ev-header{background:linear-gradient(90deg,#fef9c3,#dbeafe);border-bottom:2px solid #1e293b;padding:10px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.trait-btn{border:2px solid #94a3b8;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;background:#fff;color:#64748b}
+.trait-btn.on{border-color:#1e293b;background:#fef08a;color:#0f172a}
+.progress{height:6px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:2px}
+.progress-fill{height:100%;background:#3b82f6;border-radius:4px;transition:width .3s}
+.info-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0;color:#0f172a}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 24px;border-radius:14px;font-weight:700;font-size:14px;z-index:999;opacity:0;transition:opacity .3s;white-space:nowrap;max-width:90vw}
+.toast.show{opacity:1}
+.settings-panel{background:#fff;border:2px solid #1e293b;border-radius:14px;padding:14px;margin-bottom:12px}
+.settings-panel h3{font-size:14px;font-weight:900;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}
+.master-row{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin-bottom:5px}
+.rulebook{background:linear-gradient(135deg,#fef9c3,#dbeafe);border:2px solid #1e293b;border-radius:14px;padding:14px;margin-bottom:12px}
+.rule-block{background:#fff;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:8px}
+.rule-block h4{font-size:11px;font-weight:900;color:#475569;margin-bottom:5px}
+.self-link-box{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:2px solid #059669;border-radius:14px;padding:14px;margin-bottom:12px}
+.section-card{border:2px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:8px}
+.section-card-header{padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:900;font-size:13px}
+.section-card-body{padding:10px 12px;background:#fff}
+.eval-item-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:8px;margin-bottom:4px;background:#f8fafc}
+.rank-row{display:flex;align-items:center;gap:8px;border:2px solid #1e293b;border-radius:12px;padding:10px 12px;margin-bottom:7px;flex-wrap:wrap}
+@media(min-width:700px){
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .form-layout{display:grid;grid-template-columns:1fr 280px;gap:14px}
+}
+</style>
 </head>
 <body>
+<div id="toast" class="toast"></div>
+<div id="app"></div>
 <script>
-const SURL='https://zssovpegksskkgrkzbds.supabase.co';
-const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc292cGVna3Nza2tncmt6YmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMDQ0MDUsImV4cCI6MjA5MDY4MDQwNX0.lSjNnhYePMJELZYVkLoEMK-B_k4LHnCmZeKkJxSQpXc';
-const IS_SELF=location.search.includes('self');
-var S,loadAll,saveEval,deleteEval,startEdit,applyMember,addStore,delStore,addMember,delMember,addPeriod,delPeriod,addTrait,delTrait,addSection,delSection,addItem,delItem,updateRank,updateItem,toggleEditItem,updateItemLabel,copyUrl,requirePass,adminUnlocked,emptyVals,calcScore,rankOf;
-var mId,pId,sId,vals,selT,step,res,load,submit,reset,D,render,calcSc,emptyV,rankOf2,rankMsg,showToast2;
-const sb=supabase.createClient(SURL,SKEY,{auth:{storageKey:IS_SELF?'self-auth':'manager-auth',autoRefreshToken:false,persistSession:false}});
+const SUPABASE_URL='https://zssovpegksskkgrkzbds.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc292cGVna3Nza2tncmt6YmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMDQ0MDUsImV4cCI6MjA5MDY4MDQwNX0.lSjNnhYePMJELZYVkLoEMK-B_k4LHnCmZeKkJxSQpXc';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-function addStyle(css){const s=document.createElement('style');s.textContent=css;document.head.appendChild(s);}
-function showToast(msg,err){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.style.background=err?'#dc2626':'#0f172a';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
-function rankBg(r){return{SS:'#e9d5ff',S:'#fde047','A+':'#fed7aa',A:'#bbf7d0',B:'#bfdbfe',C:'#e2e8f0',D:'#fecaca'}[r]||'#e2e8f0';}
+function showToast(msg,err=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.background=err?'#dc2626':'#0f172a';
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);
+}
 
-if(IS_SELF){
-  // ===== 自己採点モード =====
-  document.title='スタッフ自己採点';
-  addStyle(`*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Hiragino Kaku Gothic Pro','Meiryo',sans-serif;background:#fef9c3;min-height:100vh;padding:12px}.wrap{max-width:480px;margin:0 auto}.card{background:#fff;border:2.5px solid #1e293b;border-radius:20px;overflow:hidden;margin-bottom:12px;box-shadow:0 4px 0 #1e293b}.top-bar{background:linear-gradient(90deg,#fde047,#38bdf8);border-bottom:2.5px solid #1e293b;padding:16px 18px;text-align:center}.sb{border:2px solid #1e293b;border-radius:14px;padding:12px;margin-bottom:8px}.ir{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:5px}.il{flex:1;font-size:13px;font-weight:700;line-height:1.4;color:#0f172a}select,input{border:2px solid #1e293b;border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px;background:#fff;color:#0f172a;width:100%;font-family:inherit;-webkit-appearance:none}.ss{width:96px;flex-shrink:0;padding:8px 6px;font-size:13px}.bs{border:2.5px solid #1e293b;border-radius:16px;padding:16px;font-weight:900;font-size:16px;cursor:pointer;font-family:inherit;width:100%;background:#fde047;color:#0f172a;box-shadow:0 4px 0 #1e293b}.pr{height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:4px}.pf{height:100%;background:#3b82f6;border-radius:4px;transition:width .3s}.sp{border:2.5px solid #1e293b;border-radius:16px;padding:14px;text-align:center;margin-bottom:12px}.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 24px;border-radius:14px;font-weight:700;font-size:14px;z-index:999;opacity:0;transition:opacity .3s;max-width:90vw;text-align:center}.toast.show{opacity:1}`);
-  document.body.innerHTML='<div class="wrap"><div id="toast" class="toast"></div><div id="app"><div class="card"><div class="top-bar"><div style="font-size:22px;font-weight:900;color:#0f172a">🍢 スタッフ自己採点</div></div><div style="padding:30px;text-align:center;color:#64748b;font-weight:700">読み込み中...</div></div></div></div>';
+let S={
+  tab:'list',loading:true,
+  stores:[],periods:[],members:[],traits:[],evals:[],
+  sections:[],items:[],rankSettings:[],
+  search:'',storeF:'all',editId:null,
+  form:{memberId:'',storeId:'',periodId:'',evaluator:'',vals:{},selTraits:[],good:'',improve:'',goal:''},
+  newStore:'',newMemberName:'',newMemberStore:'',newPeriod:'',
+  newTrait:'',newTraitScore:2,
+  newSectionName:'',newSectionColor:'#dbeafe',
+  newItemSectionId:'',newItemLabel:'',
+};
 
-  let D={members:[],periods:[],sections:[],items:[],rankSettings:[],traits:[]};
-  let mId='',pId='',sId='',vals={},selT=[],step='form',res=null;
+function emptyVals(){const o={};(S.items||[]).forEach(it=>{o[it.id]=0});return o;}
+function calcScore(vals){return Object.values(vals||{}).reduce((s,v)=>s+Number(v||0),0);}
+function rankOf(score){
+  const sorted=[...S.rankSettings].sort((a,b)=>b.min_score-a.min_score);
+  for(const r of sorted){if(score>=r.min_score)return r;}
+  return sorted[sorted.length-1]||{rank:'D',pay_up:0};
+}
+function rankBg(rank){return{SS:'#e9d5ff',S:'#fde047','A+':'#fed7aa',A:'#bbf7d0',B:'#bfdbfe',C:'#e2e8f0',D:'#fecaca'}[rank]||'#e2e8f0';}
 
-  rankOf=function(sc){const s=[...D.rankSettings].sort((a,b)=>b.min_score-a.min_score);for(const r of s){if(sc>=r.min_score)return r;}return s[s.length-1]||{rank:'D',pay_up:0};}
-  function rankMsg(r){return{SS:'完璧です！最高です！🎉',S:'すごい！Sランク達成！✨','A+':'あと少しでSランク！',A:'良い調子です！',B:'まだまだ伸びしろあり！',C:'一つずつ改善しよう！',D:'基礎から頑張ろう！'}[r]||'お疲れ様でした！';}
-  function calcSc(){return Object.values(vals).reduce((s,v)=>s+Number(v||0),0);}
-  function emptyV(){const o={};D.items.forEach(it=>{o[it.id]=0});return o;}
+async function loadAll(){
+  S.loading=true;render();
+  try{
+    const[st,pe,me,tr,ev,sec,it,rs]=await Promise.all([
+      sb.from('stores').select('*').order('name'),
+      sb.from('evaluation_periods').select('*').eq('is_open',true).order('start_date',{ascending:false}),
+      sb.from('staff_members').select('*').eq('active',true).order('name'),
+      sb.from('trait_options').select('*').eq('is_active',true).order('sort_order'),
+      sb.from('evaluations').select('*,staff_members(id,name,store_id),evaluation_item_scores(*),evaluation_traits(*)').order('created_at',{ascending:false}),
+      sb.from('eval_sections').select('*').eq('is_active',true).order('sort_order'),
+      sb.from('eval_items').select('*').eq('is_active',true).order('sort_order'),
+      sb.from('rank_settings').select('*').order('sort_order'),
+    ]);
+    S.stores=st.data||[];S.periods=pe.data||[];S.members=me.data||[];
+    S.traits=tr.data||[];S.evals=ev.data||[];
+    S.sections=sec.data||[];S.items=it.data||[];
+    S.rankSettings=rs.data||[];
+    if(!S.form.memberId)S.form.vals=emptyVals();
+  }catch(e){showToast('読み込みエラー: '+e.message,true);}
+  S.loading=false;render();
+}
 
-  async function load(){
-    try{
-      const[me,pe,sec,it,rs,tr]=await Promise.all([
-        sb.from('staff_members').select('*').eq('active',true).order('name'),
-        sb.from('evaluation_periods').select('*').eq('is_open',true).order('start_date',{ascending:false}),
-        sb.from('eval_sections').select('*').eq('is_active',true).order('sort_order'),
-        sb.from('eval_items').select('*').eq('is_active',true).order('sort_order'),
-        sb.from('rank_settings').select('*').order('sort_order'),
-        sb.from('trait_options').select('*').eq('is_active',true).order('sort_order'),
-      ]);
-      D.members=me.data||[];D.periods=pe.data||[];D.sections=sec.data||[];D.items=it.data||[];D.rankSettings=rs.data||[];D.traits=tr.data||[];vals=emptyV();
-    }catch(e){showToast('読み込みエラー: '+e.message,true);}
-    render();
-  }
-
-  async function submit(){
-    if(!mId||!pId){showToast('名前と評価期間を選んでください',true);return;}
-    const sc=calcSc();const rObj=rankOf(sc);const tSc=selT.reduce((s,t)=>s+(D.traits.find(o=>o.name===t)?.score||0),0);
-    try{
-      const{data,error}=await sb.from('evaluations').insert({staff_member_id:mId,store_id:sId,period_id:pId,evaluation_type:'self',evaluator_name:'自己採点',base_score:sc,trait_score:tSc,total_score:sc+tSc,rank:rObj.rank,pay_delta:rObj.pay_up}).select().single();
+async function saveEval(){
+  const f=S.form;
+  if(!f.memberId||!f.storeId||!f.periodId){showToast('スタッフ・店舗・評価期間を選んでください',true);return;}
+  const base=calcScore(f.vals);
+  const rObj=rankOf(base);
+  const tScore=f.selTraits.reduce((s,t)=>s+(S.traits.find(o=>o.name===t)?.score||0),0);
+  const row={staff_member_id:f.memberId,store_id:f.storeId,period_id:f.periodId,
+    evaluation_type:'manager',evaluator_name:f.evaluator,
+    base_score:base,trait_score:tScore,total_score:base+tScore,
+    rank:rObj.rank,pay_delta:rObj.pay_up,
+    good_point:f.good,improve_point:f.improve,next_goal:f.goal};
+  try{
+    let evalId=S.editId;
+    if(S.editId){
+      await sb.from('evaluations').update(row).eq('id',S.editId);
+      await sb.from('evaluation_item_scores').delete().eq('evaluation_id',S.editId);
+      await sb.from('evaluation_traits').delete().eq('evaluation_id',S.editId);
+    }else{
+      const{data,error}=await sb.from('evaluations').insert(row).select().single();
       if(error)throw error;
-      const eid=data.id;
-      const rows=Object.entries(vals).map(([iid,s])=>{const it=D.items.find(x=>x.id===iid);const sec=D.sections.find(x=>x.id===it?.section_id);return{evaluation_id:eid,section_key:sec?.name||'',item_key:iid,item_label:it?.label||'',score:Number(s)};});
-      if(rows.length)await sb.from('evaluation_item_scores').insert(rows);
-      if(selT.length)await sb.from('evaluation_traits').insert(selT.map(name=>{const f=D.traits.find(o=>o.name===name);return{evaluation_id:eid,trait_option_id:f?.id||null,trait_name:name,score:Number(f?.score||0)};}));
-      res={sc,rank:rObj.rank,payUp:rObj.pay_up,tSc,name:D.members.find(m=>m.id===mId)?.name||''};step='done';render();
-    }catch(e){showToast('送信エラー: '+e.message,true);}
-  }
-
-  function reset(){mId='';pId='';sId='';vals=emptyV();selT=[];step='form';res=null;render();}
-
-  render=function(){
-    const app=document.getElementById('app');
-    if(step==='done'&&res){
-      const bg=rankBg(res.rank);
-      app.innerHTML=`<div class="card"><div class="top-bar"><div style="font-size:20px;font-weight:900;color:#0f172a">🎉 採点完了！</div></div><div style="text-align:center;padding:24px 16px"><div style="font-size:15px;font-weight:900;color:#475569">${res.name}さんの結果</div><div style="border:2.5px solid #1e293b;border-radius:20px;padding:20px;background:${bg};margin:14px 0"><div style="font-size:12px;font-weight:900;color:#475569;margin-bottom:4px">ランク</div><div style="font-size:80px;font-weight:900;line-height:1;margin:12px 0">${res.rank}</div><div style="font-size:14px;font-weight:700;color:#475569;margin-top:6px">${rankMsg(res.rank)}</div></div><div style="background:#f8fafc;border:2px solid #1e293b;border-radius:14px;padding:14px;text-align:left;margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:15px;font-weight:900;padding:5px 0;border-bottom:1px solid #e2e8f0"><span>本評価点</span><span>${res.sc}点</span></div>${res.tSc!==0?`<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:#64748b;padding:4px 0"><span>特殊能力補正</span><span>${res.tSc>=0?'+':''}${res.tSc}</span></div>`:''}<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#ea580c;padding:4px 0"><span>時給アップ基準</span><span>${res.payUp>0?'+'+res.payUp+'円':'なし'}</span></div></div><div style="background:#dcfce7;border:2px solid #16a34a;border-radius:12px;padding:12px;font-size:13px;font-weight:700;color:#15803d;margin-bottom:4px">✅ 店長に結果が送信されました</div><button onclick="reset()" style="border:2px solid #1e293b;border-radius:14px;padding:12px;font-weight:900;font-size:14px;cursor:pointer;width:100%;background:#fff;color:#0f172a;margin-top:10px">もう一度採点する</button></div></div>`;
-      return;
+      evalId=data.id;
     }
-    const sc=calcSc();const rObj=rankOf(sc);const mx=D.items.length*4;
-    let h=`<div class="card"><div class="top-bar"><div style="font-size:22px;font-weight:900;color:#0f172a">🍢 スタッフ自己採点</div><div style="font-size:12px;font-weight:700;color:#475569;margin-top:3px">正直に自己評価してみよう！</div></div><div style="padding:14px"><div style="display:grid;gap:8px;margin-bottom:14px"><div><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">あなたの名前</div><select onchange="const m=D.members.find(x=>x.id===this.value);if(m){mId=m.id;sId=m.store_id;}else{mId='';sId='';}render()"><option value="">選択してください</option>${D.members.map(m=>`<option value="${m.id}" ${mId===m.id?'selected':''}>${m.name}</option>`).join('')}</select></div><div><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">評価期間</div><select onchange="pId=this.value;render()"><option value="">選択してください</option>${D.periods.map(p=>`<option value="${p.id}" ${pId===p.id?'selected':''}>${p.label}</option>`).join('')}</select></div></div><div class="sp" style="background:${rankBg(rObj.rank)}"><div style="font-size:11px;font-weight:900;color:#475569">現在のスコア</div><div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:6px"><div><div style="font-size:52px;font-weight:900">${sc}</div><div style="font-size:11px;font-weight:700;color:#475569">${mx}点満点</div></div><div style="font-size:28px;color:#94a3b8">▶</div><div><div style="font-size:56px;font-weight:900;line-height:1">${rObj.rank}</div><div style="font-size:11px;font-weight:700;color:#475569">ランク</div></div></div>${rObj.pay_up>0?`<div style="font-size:13px;font-weight:900;color:#ea580c;margin-top:6px">時給 +${rObj.pay_up}円 🎉</div>`:''}</div>`;
-    D.sections.forEach(sec=>{const si=D.items.filter(it=>it.section_id===sec.id);const ss=si.reduce((s,it)=>s+Number(vals[it.id]||0),0);const smx=si.length*4;h+=`<div class="sb" style="background:${sec.color}"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:14px;font-weight:900">${sec.name}</span><span style="font-size:12px;font-weight:900;color:#475569">${ss}/${smx}</span></div><div class="pr"><div class="pf" style="width:${smx?ss/smx*100:0}%"></div></div><div style="margin-top:8px">${si.map(it=>{const cur=vals[it.id]||0;return`<div class="ir"><span class="il">${it.label}</span><select class="ss" onchange="vals['${it.id}']=Number(this.value);render()"><option value="4" ${cur==4?'selected':''}>◎ 4点</option><option value="2" ${cur==2?'selected':''}>○ 2点</option><option value="0" ${cur==0?'selected':''}>△ 0点</option></select></div>`;}).join('')}</div></div>`;});
-    if(D.traits.length)h+=`<div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:14px"><div style="font-size:13px;font-weight:900;margin-bottom:8px">特殊能力（あてはまるものをタップ）</div><div style="display:flex;flex-wrap:wrap;gap:7px">${D.traits.map(t=>{const on=selT.includes(t.name);return`<button style="border:2px solid ${on?'#1e293b':'#94a3b8'};border-radius:999px;padding:7px 14px;font-size:13px;font-weight:900;cursor:pointer;background:${on?'#fef08a':'#fff'};color:${on?'#0f172a':'#64748b'}" onclick="const i=selT.indexOf('${t.name}');if(i>=0)selT.splice(i,1);else selT.push('${t.name}');render()">${t.name} <span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span></button>`;}).join('')}</div></div>`;
-    h+=`<button class="bs" onclick="submit()">📤 採点を送信する</button><div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">送信すると店長に結果が届きます</div></div></div>`;
-    app.innerHTML=h;
-  }
-  load();
-
-} else {
-  // ===== 店長管理モード =====
-  addStyle(`*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}body{font-family:'Hiragino Kaku Gothic Pro','Meiryo',sans-serif;background:#EFF6FF;min-height:100vh;padding:10px}.card{background:#fff;border:2.5px solid #1e293b;border-radius:20px;overflow:hidden;margin-bottom:12px;box-shadow:0 4px 0 #1e293b}.card-header{background:linear-gradient(90deg,#fef08a,#bfdbfe);border-bottom:2.5px solid #1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}.stat-box{background:#fff;border:2px solid #1e293b;border-radius:12px;padding:6px 12px;text-align:center;min-width:60px}.stat-box .num{font-size:20px;font-weight:900;color:#0f172a}.stat-box .lbl{font-size:10px;font-weight:700;color:#64748b}.tabs{display:flex;gap:3px;padding:6px;background:#f8fafc;overflow-x:auto;-webkit-overflow-scrolling:touch}.tabs::-webkit-scrollbar{display:none}.tab{flex-shrink:0;border:2px solid #cbd5e1;border-radius:12px;padding:8px 12px;font-weight:900;font-size:12px;cursor:pointer;background:#fff;color:#64748b;white-space:nowrap}.tab.active{background:#fde047;border-color:#1e293b;box-shadow:0 3px 0 #1e293b;color:#0f172a}.section-block{border:2px solid #1e293b;border-radius:14px;padding:12px;margin-bottom:8px}.item-row{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:5px}.item-row .item-label{flex:1;font-size:13px;font-weight:700;line-height:1.4}select,input{border:2px solid #1e293b;border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px;background:#fff;color:#0f172a;width:100%;font-family:inherit;-webkit-appearance:none}.btn{border:2px solid #1e293b;border-radius:12px;padding:10px 18px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit}.btn-primary{background:#fde047;color:#0f172a;box-shadow:0 3px 0 #1e293b}.btn-ghost{background:#fff;color:#0f172a}.btn-danger{background:#fff;color:#dc2626;border-color:#fca5a5}.btn-sm{padding:7px 12px;font-size:12px}.rank-badge{width:52px;height:52px;border-radius:50%;border:3px solid #1e293b;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;flex-shrink:0}.ev-card{background:#fff;border:2px solid #1e293b;border-radius:16px;overflow:hidden;margin-bottom:10px;box-shadow:0 3px 0 #1e293b}.ev-header{border-bottom:2px solid #1e293b;padding:10px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.trait-btn{border:2px solid #94a3b8;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;background:#fff;color:#64748b}.trait-btn.on{border-color:#1e293b;background:#fef08a;color:#0f172a}.progress{height:6px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:2px}.progress-fill{height:100%;background:#3b82f6;border-radius:4px;transition:width .3s}.info-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0;color:#0f172a}.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 24px;border-radius:14px;font-weight:700;font-size:14px;z-index:999;opacity:0;transition:opacity .3s;white-space:nowrap;max-width:90vw}.toast.show{opacity:1}.settings-panel{background:#fff;border:2px solid #1e293b;border-radius:14px;padding:14px;margin-bottom:12px}.settings-panel h3{font-size:14px;font-weight:900;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}.master-row{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin-bottom:5px}.rulebook{background:linear-gradient(135deg,#fef9c3,#dbeafe);border:2px solid #1e293b;border-radius:14px;padding:14px;margin-bottom:12px}.rule-block{background:#fff;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:8px}.rule-block h4{font-size:11px;font-weight:900;color:#475569;margin-bottom:5px}.self-link-box{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:2px solid #059669;border-radius:14px;padding:14px;margin-bottom:12px}.section-card{border:2px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:8px}.section-card-header{padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:900;font-size:13px}.section-card-body{padding:10px 12px;background:#fff}.eval-item-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:8px;margin-bottom:4px;background:#f8fafc}.rank-row{display:flex;align-items:center;gap:8px;border:2px solid #1e293b;border-radius:12px;padding:10px 12px;margin-bottom:7px;flex-wrap:wrap}@media(min-width:700px){.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}}@media(min-width:900px){.form-layout{display:grid;grid-template-columns:1fr 280px;gap:14px}}`);
-  document.body.innerHTML='<div id="toast" class="toast"></div><div id="app"></div>';
-
-  adminUnlocked=false;const ADMIN_PASS='2315';
-  requirePass=function(tab){const LOCKED=['settings','items','ranks'];if(!LOCKED.includes(tab))return true;if(adminUnlocked)return true;const p=prompt('🔒 管理者パスワードを入力してください');if(p===ADMIN_PASS){adminUnlocked=true;return true;}if(p!==null)showToast('パスワードが違います',true);return false;}
-
-  S={tab:'list',loading:true,stores:[],periods:[],members:[],traits:[],evals:[],sections:[],items:[],rankSettings:[],search:'',storeF:'all',listFilter:'all',periodF:'all',editId:null,form:{memberId:'',storeId:'',periodId:'',evaluator:'',vals:{},selTraits:[],good:'',improve:'',goal:''},newStore:'',newMemberName:'',newMemberStore:'',newPeriod:'',newTrait:'',newTraitScore:2,newSectionName:'',newSectionColor:'#dbeafe',newItemSectionId:'',newItemLabel:''};
-
-  emptyVals=function(){const o={};(S.items||[]).forEach(it=>{o[it.id]=0});return o;}
-  calcScore=function(vals){return Object.values(vals||{}).reduce((s,v)=>s+Number(v||0),0);}
-  rankOf=function(score){const sorted=[...S.rankSettings].sort((a,b)=>b.min_score-a.min_score);for(const r of sorted){if(score>=r.min_score)return r;}return sorted[sorted.length-1]||{rank:'D',pay_up:0};}
-
-  loadAll=async function(){
-    S.loading=true;render();
-    try{
-      const[st,pe,me,tr,ev,sec,it,rs]=await Promise.all([
-        sb.from('stores').select('*').order('name'),
-        sb.from('evaluation_periods').select('*').eq('is_open',true).order('start_date',{ascending:false}),
-        sb.from('staff_members').select('*').eq('active',true).order('name'),
-        sb.from('trait_options').select('*').eq('is_active',true).order('sort_order'),
-        sb.from('evaluations').select('*,staff_members(id,name,store_id),evaluation_item_scores(*),evaluation_traits(*)').order('created_at',{ascending:false}),
-        sb.from('eval_sections').select('*').eq('is_active',true).order('sort_order'),
-        sb.from('eval_items').select('*').eq('is_active',true).order('sort_order'),
-        sb.from('rank_settings').select('*').order('sort_order'),
-      ]);
-      S.stores=st.data||[];S.periods=pe.data||[];S.members=me.data||[];S.traits=tr.data||[];S.evals=ev.data||[];S.sections=sec.data||[];S.items=it.data||[];S.rankSettings=rs.data||[];
-      if(!S.form.memberId)S.form.vals=emptyVals();
-    }catch(e){showToast('読み込みエラー: '+e.message,true);}
-    S.loading=false;render();
-  }
-
-  saveEval=async function(){
-    const f=S.form;if(!f.memberId||!f.storeId||!f.periodId){showToast('スタッフ・店舗・評価期間を選んでください',true);return;}
-    const base=calcScore(f.vals);const rObj=rankOf(base);const tScore=f.selTraits.reduce((s,t)=>s+(S.traits.find(o=>o.name===t)?.score||0),0);
-    const row={staff_member_id:f.memberId,store_id:f.storeId,period_id:f.periodId,evaluation_type:'manager',evaluator_name:f.evaluator,base_score:base,trait_score:tScore,total_score:base+tScore,rank:rObj.rank,pay_delta:rObj.pay_up,good_point:f.good,improve_point:f.improve,next_goal:f.goal};
-    try{
-      let evalId=S.editId;
-      if(S.editId){await sb.from('evaluations').update(row).eq('id',S.editId);await sb.from('evaluation_item_scores').delete().eq('evaluation_id',S.editId);await sb.from('evaluation_traits').delete().eq('evaluation_id',S.editId);}
-      else{const{data,error}=await sb.from('evaluations').insert(row).select().single();if(error)throw error;evalId=data.id;}
-      const itemRows=Object.entries(f.vals).map(([item_id,score])=>{const it=S.items.find(x=>x.id===item_id);const sec=S.sections.find(x=>x.id===it?.section_id);return{evaluation_id:evalId,section_key:sec?.name||'',item_key:item_id,item_label:it?.label||'',score:Number(score)};});
-      if(itemRows.length)await sb.from('evaluation_item_scores').insert(itemRows);
-      if(f.selTraits.length)await sb.from('evaluation_traits').insert(f.selTraits.map(name=>{const found=S.traits.find(o=>o.name===name);return{evaluation_id:evalId,trait_option_id:found?.id||null,trait_name:name,score:Number(found?.score||0)};}));
-      showToast(S.editId?'更新しました！':'保存しました！');S.editId=null;S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};S.tab='list';await loadAll();
-    }catch(e){showToast('保存エラー: '+e.message,true);}
-  }
-
-  deleteEval=async function(id){if(!confirm('この評価を削除しますか？'))return;await sb.from('evaluations').delete().eq('id',id);showToast('削除しました');await loadAll();}
-  startEdit=function(id){const ev=S.evals.find(e=>e.id===id);if(!ev)return;const vals=emptyVals();(ev.evaluation_item_scores||[]).forEach(r=>{if(r.item_key&&vals.hasOwnProperty(r.item_key))vals[r.item_key]=Number(r.score||0);});S.form={memberId:ev.staff_member_id,storeId:ev.store_id,periodId:ev.period_id,evaluator:ev.evaluator_name||'',vals,selTraits:(ev.evaluation_traits||[]).map(t=>t.trait_name),good:ev.good_point||'',improve:ev.improve_point||'',goal:ev.next_goal||''};S.editId=ev.id;S.tab='new';render();}
-  applyMember=function(id){const m=S.members.find(x=>x.id===id);if(!m)return;S.form={...S.form,memberId:m.id,storeId:m.store_id};render();}
-  addStore=async function(){const n=S.newStore.trim();if(!n)return;await sb.from('stores').insert({name:n});S.newStore='';showToast('追加しました');await loadAll();}
-  delStore=async function(id){if(!confirm('削除しますか？'))return;await sb.from('stores').delete().eq('id',id);showToast('削除しました');await loadAll();}
-  addMember=async function(){const n=S.newMemberName.trim(),sid=S.newMemberStore;if(!n||!sid){showToast('名前と店舗を入力してください',true);return;}await sb.from('staff_members').insert({name:n,store_id:sid,active:true});S.newMemberName='';showToast('追加しました');await loadAll();}
-  delMember=async function(id){if(!confirm('削除しますか？'))return;await sb.from('staff_members').update({active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  addPeriod=async function(){const l=S.newPeriod.trim();if(!l)return;await sb.from('evaluation_periods').insert({label:l,is_open:true});S.newPeriod='';showToast('追加しました');await loadAll();}
-  delPeriod=async function(id){if(!confirm('削除しますか？'))return;await sb.from('evaluation_periods').update({is_open:false}).eq('id',id);showToast('非表示にしました');await loadAll();}
-  addTrait=async function(){const n=S.newTrait.trim();if(!n)return;const mx=Math.max(0,...S.traits.map(t=>t.sort_order||0));await sb.from('trait_options').insert({name:n,score:Number(S.newTraitScore||0),sort_order:mx+1,is_active:true});S.newTrait='';showToast('追加しました');await loadAll();}
-  delTrait=async function(id){if(!confirm('削除しますか？'))return;await sb.from('trait_options').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  addSection=async function(){const n=S.newSectionName.trim();if(!n)return;const mx=Math.max(0,...S.sections.map(s=>s.sort_order||0));await sb.from('eval_sections').insert({name:n,color:S.newSectionColor,sort_order:mx+1,is_active:true});S.newSectionName='';showToast('追加しました');await loadAll();}
-  delSection=async function(id){if(!confirm('このセクションと項目をすべて削除しますか？'))return;await sb.from('eval_sections').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  addItem=async function(){const l=S.newItemLabel.trim(),sid=S.newItemSectionId;if(!l||!sid){showToast('セクションと項目名を入力してください',true);return;}const mx=Math.max(0,...S.items.filter(i=>i.section_id===sid).map(i=>i.sort_order||0));await sb.from('eval_items').insert({section_id:sid,label:l,sort_order:mx+1,is_active:true});S.newItemLabel='';showToast('追加しました');await loadAll();}
-  delItem=async function(id){if(!confirm('削除しますか？'))return;await sb.from('eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
-  toggleEditItem=function(id, currentLabel){
-    const labelEl=document.getElementById('item-label-'+id);
-    const inputEl=document.getElementById('item-input-'+id);
-    const row=document.getElementById('item-row-'+id);
-    const btn=row.querySelector('.btn-ghost');
-    if(inputEl.style.display==='none'){
-      labelEl.style.display='none';
-      inputEl.style.display='block';
-      inputEl.focus();
-      btn.textContent='保存';
-      btn.style.background='#3b82f6';
-      btn.style.color='#fff';
-      btn.style.borderColor='#3b82f6';
-    } else {
-      const newLabel=inputEl.value.trim();
-      if(!newLabel){showToast('項目名を入力してください',true);return;}
-      updateItemLabel(id, newLabel);
+    const itemRows=Object.entries(f.vals).map(([item_id,score])=>{
+      const it=S.items.find(x=>x.id===item_id);
+      const sec=S.sections.find(x=>x.id===it?.section_id);
+      return{evaluation_id:evalId,section_key:sec?.name||'',item_key:item_id,item_label:it?.label||'',score:Number(score)};
+    });
+    if(itemRows.length)await sb.from('evaluation_item_scores').insert(itemRows);
+    if(f.selTraits.length){
+      const trows=f.selTraits.map(name=>{
+        const found=S.traits.find(o=>o.name===name);
+        return{evaluation_id:evalId,trait_option_id:found?.id||null,trait_name:name,score:Number(found?.score||0)};
+      });
+      await sb.from('evaluation_traits').insert(trows);
     }
-  };
-  updateItemLabel=async function(id, label){
-    try{
-      await sb.from('eval_items').update({label}).eq('id',id);
-      showToast('更新しました');
-      await loadAll();
-    }catch(e){showToast('更新エラー: '+e.message,true);}
-  };
-  updateItem=async function(id, label){
-    label=label.trim();
-    if(!label){showToast('項目名を入力してください',true);return;}
-    try{
-      await sb.from('eval_items').update({label}).eq('id',id);
-      showToast('更新しました');
-      await loadAll();
-    }catch(e){showToast('更新エラー: '+e.message,true);}
-  };
-  updateRank=async function(id,field,val){await sb.from('rank_settings').update({[field]:Number(val)}).eq('id',id);await loadAll();}
-  copyUrl=function(){const url=location.origin+location.pathname+'?self';navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>prompt('スタッフ自己採点URL:',url));}
+    showToast(S.editId?'更新しました！':'保存しました！');
+    S.editId=null;
+    S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};
+    S.tab='list';await loadAll();
+  }catch(e){showToast('保存エラー: '+e.message,true);}
+}
 
-  render=function(){
-    const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF}=S;
-    if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
-    const base=calcScore(form.vals);const rObj=rankOf(base);const rank=rObj.rank;
-    const tScore=form.selTraits.reduce((s,t)=>s+(traits.find(o=>o.name===t)?.score||0),0);
-    const maxScore=items.length*4;
-    const filtered=evals.filter(e=>{const ok=storeF==='all'||e.store_id===storeF;const pOk=(S.periodF||'all')==='all'||e.period_id===S.periodF;const q=search.trim();const name=e.staff_members?.name||'';const store=(stores.find(s=>s.id===e.store_id)||{}).name||'';const period=(periods.find(p=>p.id===e.period_id)||{}).label||'';return ok&&pOk&&(!q||[name,store,period,e.evaluator_name].some(v=>(v||'').includes(q)));}).sort((a,b)=>b.base_score-a.base_score);
-    const total=filtered.length;const avg=total?Math.round(filtered.reduce((s,e)=>s+e.base_score,0)/total*10)/10:0;
-    const sRank=rankSettings.find(r=>r.rank==='S');const sCount=sRank?filtered.filter(e=>e.base_score>=sRank.min_score).length:0;
-    const rulebookHtml=`<div class="rulebook"><div style="font-size:14px;font-weight:900;margin-bottom:10px">📖 査定ルールブック</div><div class="rule-block"><h4>本評価の判定</h4><div style="font-size:12px;font-weight:700;color:#0f172a">◎＝4点 / ○＝2点 / △＝0点</div><div style="font-size:12px;font-weight:700;color:#0f172a">全${items.length}項目・${maxScore}点満点</div></div><div class="rule-block"><h4>ランク基準</h4>${[...rankSettings].sort((a,b)=>b.min_score-a.min_score).map(r=>`<div style="display:flex;align-items:center;gap:6px;padding:2px 0"><span style="display:inline-flex;width:28px;height:28px;border-radius:50%;border:2px solid #1e293b;background:${rankBg(r.rank)};align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">${r.rank}</span><span style="font-size:12px;font-weight:700">${r.min_score}点以上${r.pay_up>0?' ／ +'+r.pay_up+'円':''}</span></div>`).join('')}</div><div class="rule-block"><h4>特殊能力補正</h4>${traits.map(t=>`<div style="font-size:12px;font-weight:700;padding:1px 0">${t.name}：<span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span></div>`).join('')}</div></div>`;
+async function deleteEval(id){
+  if(!confirm('この評価を削除しますか？'))return;
+  await sb.from('evaluations').delete().eq('id',id);
+  showToast('削除しました');await loadAll();
+}
 
-    let html=`<div class="card"><div class="card-header"><div><div style="font-size:17px;font-weight:900;color:#0f172a">パワフルスタッフ査定</div><div style="font-size:10px;font-weight:700;color:#475569">店長管理画面</div></div><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap"><div class="stat-box"><div class="num">${total}</div><div class="lbl">件数</div></div><div class="stat-box"><div class="num">${avg}</div><div class="lbl">平均</div></div><div class="stat-box"><div class="num">${sCount}</div><div class="lbl">S以上</div></div><button class="btn btn-ghost btn-sm" onclick="loadAll()">🔄</button></div></div><div class="tabs"><button class="tab ${tab==='list'?'active':''}" onclick="S.tab='list';render()">📋 一覧</button><button class="tab ${tab==='new'?'active':''}" onclick="S.tab='new';if(!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''}};render()">${editId?'✏️':'＋'} 入力</button><button class="tab ${tab==='compare'?'active':''}" onclick="S.tab='compare';render()">📊 比較</button><button class="tab ${tab==='settings'?'active':''}" onclick="if(requirePass('settings')){S.tab='settings';render()}">⭐ 能力設定 🔒</button><button class="tab ${tab==='items'?'active':''}" onclick="if(requirePass('items')){S.tab='items';render()}">📝 評価項目 🔒</button><button class="tab ${tab==='ranks'?'active':''}" onclick="if(requirePass('ranks')){S.tab='ranks';render()}">🏆 ランク 🔒</button><button class="tab ${tab==='master'?'active':''}" onclick="S.tab='master';render()">⚙️ 基本設定</button></div></div>`;
+function startEdit(id){
+  const ev=S.evals.find(e=>e.id===id);if(!ev)return;
+  const vals=emptyVals();
+  (ev.evaluation_item_scores||[]).forEach(r=>{if(r.item_key&&vals.hasOwnProperty(r.item_key))vals[r.item_key]=Number(r.score||0);});
+  S.form={memberId:ev.staff_member_id,storeId:ev.store_id,periodId:ev.period_id,
+    evaluator:ev.evaluator_name||'',vals,
+    selTraits:(ev.evaluation_traits||[]).map(t=>t.trait_name),
+    good:ev.good_point||'',improve:ev.improve_point||'',goal:ev.next_goal||''};
+  S.editId=ev.id;S.tab='new';render();
+}
 
-    html+=`<div class="self-link-box"><div style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">📱 スタッフ自己採点ページ</div><div style="font-size:12px;font-weight:700;color:#047857;margin-bottom:8px">このURLをスタッフに送るだけで自己採点できます</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div style="flex:1;background:#fff;border:1.5px solid #059669;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;color:#0f172a;word-break:break-all">${location.origin+location.pathname}?self</div><button class="btn btn-sm" style="background:#059669;color:#fff;border-color:#059669;white-space:nowrap" onclick="copyUrl()">📋 コピー</button></div></div>`;
+function applyMember(id){
+  const m=S.members.find(x=>x.id===id);if(!m)return;
+  S.form={...S.form,memberId:m.id,storeId:m.store_id};render();
+}
 
-    if(tab==='list'){
-      const lf=S.listFilter||'all';
-      html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input style="flex:1;min-width:140px" placeholder="名前・店舗で検索" value="${search}" oninput="S.search=this.value;render()"><select style="width:auto;min-width:100px" onchange="S.storeF=this.value;render()"><option value="all">全店舗</option>${stores.map(s=>`<option value="${s.id}" ${storeF===s.id?'selected':''}>${s.name}</option>`).join('')}</select><button class="btn btn-primary btn-sm" onclick="S.tab='new';S.editId=null;S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">＋ 新規</button></div><div style="margin-bottom:10px"><select style="width:100%" onchange="S.periodF=this.value;render()"><option value="all">📅 全期間</option>${[...new Map(evals.map(e=>[e.period_id,(periods.find(p=>p.id===e.period_id)||{}).label||'未設定'])).entries()].map(([id,label])=>`<option value="${id}" ${S.periodF===id?'selected':''}>${label}</option>`).join('')}</select></div>`<div style="display:flex;gap:6px;margin-bottom:12px"><button style="flex:1;border:2px solid #1e293b;border-radius:12px;padding:8px;font-weight:900;font-size:13px;cursor:pointer;background:${lf==='all'?'#1e293b':'#fff'};color:${lf==='all'?'#fff':'#1e293b'}" onclick="S.listFilter='all';render()">📋 すべて</button><button style="flex:1;border:2px solid #3b82f6;border-radius:12px;padding:8px;font-weight:900;font-size:13px;cursor:pointer;background:${lf==='manager'?'#3b82f6':'#fff'};color:${lf==='manager'?'#fff':'#3b82f6'}" onclick="S.listFilter='manager';render()">👔 店長評価</button><button style="flex:1;border:2px solid #f59e0b;border-radius:12px;padding:8px;font-weight:900;font-size:13px;cursor:pointer;background:${lf==='self'?'#f59e0b':'#fff'};color:${lf==='self'?'#fff':'#92400e'}" onclick="S.listFilter='self';render()">🙋 自己採点</button></div>`;
-      const mF=filtered.filter(e=>e.evaluation_type==='manager');const sF=filtered.filter(e=>e.evaluation_type==='self');
-      const sm=lf==='all'||lf==='manager';const ss=lf==='all'||lf==='self';
-      function ec(ev){const sName=(stores.find(s=>s.id===ev.store_id)||{}).name||'未設定';const pLabel=(periods.find(p=>p.id===ev.period_id)||{}).label||'未設定';const stName=ev.staff_members?.name||'未設定';const evT=ev.evaluation_traits||[];const isSelf=ev.evaluation_type==='self';return`<div class="ev-card"><div class="ev-header" style="background:${isSelf?'linear-gradient(90deg,#fef9c3,#fde68a)':'linear-gradient(90deg,#dbeafe,#bfdbfe)'}"><div style="flex:1"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:900;background:${isSelf?'#f59e0b':'#3b82f6'};color:#fff;padding:2px 8px;border-radius:999px">${isSelf?'🙋 自己採点':'👔 店長評価'}</span></div><div style="font-size:16px;font-weight:900;margin-top:4px">${stName}</div><div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${sName} / ${pLabel}</div>${!isSelf?`<div style="font-size:10px;color:#94a3b8">評価者: ${ev.evaluator_name||'未設定'}</div>`:''}</div><div class="rank-badge" style="background:${rankBg(ev.rank)}">${ev.rank}</div></div><div style="padding:10px 14px"><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:8px"><div class="info-row"><span>本評価点</span><span>${ev.base_score}点</span></div><div class="info-row" style="color:#64748b"><span>特殊能力補正</span><span>${ev.trait_score>=0?'+':''}${ev.trait_score}</span></div><div class="info-row" style="color:#ea580c"><span>時給アップ</span><span>${ev.pay_delta>0?'+'+ev.pay_delta+'円':'なし'}</span></div></div>${evT.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${evT.map(t=>`<span style="border-radius:999px;border:1.5px solid #1e293b;padding:2px 8px;font-size:11px;font-weight:900;background:${(t.score||0)>0?'#fef9c3':'#fee2e2'}">${t.trait_name} ${(t.score||0)>0?'+':''}${t.score}</span>`).join('')}</div>`:''}${(ev.good_point||ev.improve_point||ev.next_goal)?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">${ev.good_point?`<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:900;color:#15803d;margin-bottom:4px">✅ 良い点</div><div style="font-size:13px;font-weight:700;line-height:1.5">${ev.good_point}</div></div>`:''} ${ev.improve_point?`<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:900;color:#c2410c;margin-bottom:4px">⚠️ 改善点</div><div style="font-size:13px;font-weight:700;line-height:1.5">${ev.improve_point}</div></div>`:''} ${ev.next_goal?`<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:900;color:#1d4ed8;margin-bottom:4px">🎯 次回目標</div><div style="font-size:13px;font-weight:700;line-height:1.5">${ev.next_goal}</div></div>`:''}</div>`:''}<div style="display:flex;gap:8px">${!isSelf?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${ev.id}')">編集</button>`:''}<button class="btn btn-danger btn-sm" onclick="deleteEval('${ev.id}')">削除</button></div></div></div>`;}
-      if(!filtered.length){html+=`<div class="card" style="padding:40px;text-align:center"><div style="font-size:36px;margin-bottom:10px">📋</div><div style="font-weight:900;color:#64748b">評価データがありません</div><button class="btn btn-primary" style="margin-top:14px" onclick="S.tab='new';render()">評価を入力する</button></div>`;}
-      else{if(sm&&mF.length){html+=`<div style="font-size:13px;font-weight:900;color:#1d4ed8;margin-bottom:6px;padding:4px 0;border-bottom:2px solid #bfdbfe">👔 店長評価 (${mF.length}件)</div>`;mF.forEach(ev=>{html+=ec(ev);});}if(ss&&sF.length){html+=`<div style="font-size:13px;font-weight:900;color:#f59e0b;margin:12px 0 6px;padding:4px 0;border-bottom:2px solid #fde68a">🙋 自己採点 (${sF.length}件)</div>`;sF.forEach(ev=>{html+=ec(ev);});}}
-    }
+async function addStore(){const n=S.newStore.trim();if(!n)return;await sb.from('stores').insert({name:n});S.newStore='';showToast('追加しました');await loadAll();}
+async function delStore(id){if(!confirm('削除しますか？'))return;await sb.from('stores').delete().eq('id',id);showToast('削除しました');await loadAll();}
+async function addMember(){
+  const n=S.newMemberName.trim(),sid=S.newMemberStore;
+  if(!n||!sid){showToast('名前と店舗を入力してください',true);return;}
+  await sb.from('staff_members').insert({name:n,store_id:sid,active:true});
+  S.newMemberName='';showToast('追加しました');await loadAll();
+}
+async function delMember(id){if(!confirm('削除しますか？'))return;await sb.from('staff_members').update({active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+async function addPeriod(){const l=S.newPeriod.trim();if(!l)return;await sb.from('evaluation_periods').insert({label:l,is_open:true});S.newPeriod='';showToast('追加しました');await loadAll();}
+async function delPeriod(id){if(!confirm('削除しますか？'))return;await sb.from('evaluation_periods').update({is_open:false}).eq('id',id);showToast('非表示にしました');await loadAll();}
+async function addTrait(){
+  const n=S.newTrait.trim();if(!n)return;
+  const mx=Math.max(0,...S.traits.map(t=>t.sort_order||0));
+  await sb.from('trait_options').insert({name:n,score:Number(S.newTraitScore||0),sort_order:mx+1,is_active:true});
+  S.newTrait='';showToast('追加しました');await loadAll();
+}
+async function delTrait(id){if(!confirm('削除しますか？'))return;await sb.from('trait_options').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+async function addSection(){
+  const n=S.newSectionName.trim();if(!n)return;
+  const mx=Math.max(0,...S.sections.map(s=>s.sort_order||0));
+  await sb.from('eval_sections').insert({name:n,color:S.newSectionColor,sort_order:mx+1,is_active:true});
+  S.newSectionName='';showToast('追加しました');await loadAll();
+}
+async function delSection(id){if(!confirm('このセクションと項目をすべて削除しますか？'))return;await sb.from('eval_sections').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+async function addItem(){
+  const l=S.newItemLabel.trim(),sid=S.newItemSectionId;
+  if(!l||!sid){showToast('セクションと項目名を入力してください',true);return;}
+  const mx=Math.max(0,...S.items.filter(i=>i.section_id===sid).map(i=>i.sort_order||0));
+  await sb.from('eval_items').insert({section_id:sid,label:l,sort_order:mx+1,is_active:true});
+  S.newItemLabel='';showToast('追加しました');await loadAll();
+}
+async function delItem(id){if(!confirm('削除しますか？'))return;await sb.from('eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+async function updateItem(id, label){
+  label=label.trim();
+  if(!label){showToast('項目名を入力してください',true);return;}
+  try{
+    await sb.from('eval_items').update({label}).eq('id',id);
+    showToast('更新しました');
+    await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+async function updateRank(id,field,val){await sb.from('rank_settings').update({[field]:Number(val)}).eq('id',id);await loadAll();}
 
-    if(tab==='new'){
-      html+=`<div class="form-layout"><div class="card"><div style="border-bottom:2px solid #1e293b;padding:12px 16px;font-size:16px;font-weight:900">${editId?'評価を編集':'新規評価入力'}</div><div style="padding:14px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"><div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">スタッフ名</div><select onchange="applyMember(this.value)"><option value="">選択</option>${members.map(m=>`<option value="${m.id}" ${form.memberId===m.id?'selected':''}>${m.name}</option>`).join('')}</select></div><div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">店舗</div><select onchange="S.form.storeId=this.value;render()"><option value="">選択</option>${stores.map(s=>`<option value="${s.id}" ${form.storeId===s.id?'selected':''}>${s.name}</option>`).join('')}</select></div><div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">評価期間</div><select onchange="S.form.periodId=this.value;render()"><option value="">選択</option>${periods.map(p=>`<option value="${p.id}" ${form.periodId===p.id?'selected':''}>${p.label}</option>`).join('')}</select></div><div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">評価者</div><input value="${form.evaluator}" placeholder="評価者名" oninput="S.form.evaluator=this.value"></div></div>`;
-      sections.forEach(sec=>{const si=items.filter(it=>it.section_id===sec.id);const ss=si.reduce((s,it)=>s+Number(form.vals[it.id]||0),0);const mx=si.length*4;html+=`<div class="section-block" style="background:${sec.color}"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;font-weight:900">${sec.name}</span><span style="font-size:12px;font-weight:900;color:#475569">${ss}/${mx}</span></div><div class="progress"><div class="progress-fill" style="width:${mx?ss/mx*100:0}%"></div></div><div style="margin-top:8px">${si.map(it=>{const cur=form.vals[it.id]||0;return`<div class="item-row"><span class="item-label">${it.label}</span><select style="width:100px;flex-shrink:0" onchange="S.form.vals['${it.id}']=Number(this.value);render()"><option value="4" ${cur==4?'selected':''}>◎ 4点</option><option value="2" ${cur==2?'selected':''}>○ 2点</option><option value="0" ${cur==0?'selected':''}>△ 0点</option></select></div>`;}).join('')}</div></div>`;});
-      html+=`<div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:10px"><div style="font-weight:900;font-size:13px;margin-bottom:8px">特殊能力補正</div><div style="display:flex;flex-wrap:wrap;gap:6px">${traits.map(t=>`<button class="trait-btn ${form.selTraits.includes(t.name)?'on':''}" onclick="const i=S.form.selTraits.indexOf('${t.name}');if(i>=0)S.form.selTraits.splice(i,1);else S.form.selTraits.push('${t.name}');render()">${t.name} <span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span></button>`).join('')}</div></div>`;
-      html+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">${[['good','良い点','強み'],['improve','改善点','改善点'],['goal','次回目標','目標']].map(([k,l,ph])=>`<div style="border:2px solid #1e293b;border-radius:12px;padding:10px"><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:5px">${l}</div><textarea oninput="S.form['${k}']=this.value" placeholder="${ph}" style="min-height:80px;resize:vertical;font-size:13px;padding:10px;border:2px solid #1e293b;border-radius:10px;width:100%;font-family:inherit">${(form[k]||'').replace(/</g,'&lt;')}</textarea></div>`).join('')}</div>`;
-      html+=`<div style="display:flex;gap:8px"><button class="btn btn-primary" onclick="saveEval()">${editId?'更新する':'保存する'}</button><button class="btn btn-ghost" onclick="S.tab='list';S.editId=null;render()">キャンセル</button></div></div></div><div><div class="card"><div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:13px;font-weight:900">プレビュー</div><div style="padding:12px"><div style="border:2px solid #1e293b;border-radius:12px;padding:10px;background:${rankBg(rank)};display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div><div style="font-size:10px;font-weight:900;color:#475569">ランク</div><div style="font-size:36px;font-weight:900">${rank}</div></div><div style="text-align:right"><div style="font-size:10px;font-weight:900;color:#475569">本評価点</div><div style="font-size:28px;font-weight:900">${base}</div></div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:8px"><div class="info-row"><span>特殊能力補正</span><span>${tScore>=0?'+':''}${tScore}</span></div><div class="info-row" style="color:#ea580c"><span>時給アップ</span><span>${rObj.pay_up>0?'+'+rObj.pay_up+'円':'なし'}</span></div></div>${sections.map(sec=>{const si=items.filter(it=>it.section_id===sec.id);const sc=si.reduce((s,it)=>s+Number(form.vals[it.id]||0),0);const mx=si.length*4;return`<div style="margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:900;color:#475569;margin-bottom:1px"><span>${sec.name}</span><span>${sc}/${mx}</span></div><div class="progress"><div class="progress-fill" style="width:${mx?sc/mx*100:0}%"></div></div></div>`;}).join('')}</div></div>${rulebookHtml}</div></div>`;
-    }
+function copyUrl(){
+  const url=location.origin+'/self.html';
+  navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>showToast(url));
+}
 
-    if(tab==='compare'){
-      const mgE=evals.filter(e=>e.evaluation_type==='manager');const sfE=evals.filter(e=>e.evaluation_type==='self');
-      const pairs=[];mgE.forEach(mg=>{const sf=sfE.find(s=>s.staff_member_id===mg.staff_member_id&&s.period_id===mg.period_id);if(sf)pairs.push({mg,sf});});
-      html+=`<div style="margin-bottom:10px;font-size:13px;font-weight:700;color:#475569">店長評価と自己採点が両方ある ${pairs.length} 件</div>`;
-      if(!pairs.length){html+=`<div class="card" style="padding:40px;text-align:center"><div style="font-size:36px;margin-bottom:10px">📊</div><div style="font-weight:900;color:#64748b">比較できるデータがありません</div></div>`;}
-      pairs.forEach(({mg,sf})=>{
-        const staffName=mg.staff_members?.name||'未設定';const storeName=(stores.find(s=>s.id===mg.store_id)||{}).name||'未設定';const periodLabel=(periods.find(p=>p.id===mg.period_id)||{}).label||'未設定';
-        const diff=mg.base_score-sf.base_score;const dc=diff>0?'#15803d':diff<0?'#dc2626':'#475569';
-        const mgS={};const sfS={};
-        (mg.evaluation_item_scores||[]).forEach(r=>{const it=items.find(x=>x.id===r.item_key);if(it){const sec=sections.find(s=>s.id===it.section_id);if(sec)mgS[sec.id]=(mgS[sec.id]||0)+Number(r.score||0);}});
-        (sf.evaluation_item_scores||[]).forEach(r=>{const it=items.find(x=>x.id===r.item_key);if(it){const sec=sections.find(s=>s.id===it.section_id);if(sec)sfS[sec.id]=(sfS[sec.id]||0)+Number(r.score||0);}});
-        html+=`<div class="ev-card" style="margin-bottom:14px"><div class="ev-header" style="background:linear-gradient(90deg,#dbeafe,#fef9c3)"><div style="flex:1"><div style="font-size:16px;font-weight:900">${staffName}</div><div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${storeName} / ${periodLabel}</div></div></div><div style="padding:12px 14px"><div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:12px"><div style="background:#dbeafe;border:2px solid #1e293b;border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;font-weight:900;color:#1d4ed8;margin-bottom:2px">👔 店長評価</div><div style="font-size:32px;font-weight:900">${mg.base_score}</div><div style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:2px solid #1e293b;background:${rankBg(mg.rank)};font-size:13px;font-weight:900;margin-top:4px">${mg.rank}</div></div><div style="text-align:center"><div style="font-size:20px;font-weight:900;color:${dc}">${diff>=0?'+':''}${diff}</div><div style="font-size:10px;font-weight:700;color:${dc};margin-top:2px">${diff>0?'店長が高い':diff<0?'自己が高い':'一致'}</div></div><div style="background:#fef9c3;border:2px solid #1e293b;border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;font-weight:900;color:#92400e;margin-bottom:2px">🙋 自己採点</div><div style="font-size:32px;font-weight:900">${sf.base_score}</div><div style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:2px solid #1e293b;background:${rankBg(sf.rank)};font-size:13px;font-weight:900;margin-top:4px">${sf.rank}</div></div></div><div style="border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">${sections.map(sec=>{const si=items.filter(it=>it.section_id===sec.id);const mx=si.length*4;const ms=mgS[sec.id]||0;const ss2=sfS[sec.id]||0;const gap=ms-ss2;const gc=gap>0?'#15803d':gap<0?'#dc2626':'#94a3b8';return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:11px;font-weight:900">${sec.name}</span><span style="font-size:11px;font-weight:900;color:${gc}">${gap>=0?'+':''}${gap}点</span></div><div style="display:grid;gap:3px"><div style="display:flex;align-items:center;gap:4px"><span style="font-size:9px;font-weight:700;color:#1d4ed8;width:28px;flex-shrink:0">店長</span><div style="flex:1;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden"><div style="height:100%;background:#3b82f6;border-radius:4px;width:${mx?ms/mx*100:0}%"></div></div><span style="font-size:10px;font-weight:900;width:24px;text-align:right">${ms}</span></div><div style="display:flex;align-items:center;gap:4px"><span style="font-size:9px;font-weight:700;color:#92400e;width:28px;flex-shrink:0">自己</span><div style="flex:1;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden"><div style="height:100%;background:#fbbf24;border-radius:4px;width:${mx?ss2/mx*100:0}%"></div></div><span style="font-size:10px;font-weight:900;width:24px;text-align:right">${ss2}</span></div></div></div>`;}).join('')}</div></div></div>`;
+function render(){
+  const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF}=S;
+  if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
+
+  const base=calcScore(form.vals);
+  const rObj=rankOf(base);
+  const rank=rObj.rank;
+  const tScore=form.selTraits.reduce((s,t)=>s+(traits.find(o=>o.name===t)?.score||0),0);
+  const maxScore=items.length*4;
+
+  const filtered=evals.filter(e=>{
+    const ok=storeF==='all'||e.store_id===storeF;
+    const q=search.trim();
+    const name=e.staff_members?.name||'';
+    const store=(stores.find(s=>s.id===e.store_id)||{}).name||'';
+    const period=(periods.find(p=>p.id===e.period_id)||{}).label||'';
+    return ok&&(!q||[name,store,period,e.evaluator_name].some(v=>(v||'').includes(q)));
+  }).sort((a,b)=>b.base_score-a.base_score);
+
+  const total=filtered.length;
+  const avg=total?Math.round(filtered.reduce((s,e)=>s+e.base_score,0)/total*10)/10:0;
+  const sRank=rankSettings.find(r=>r.rank==='S');
+  const sCount=sRank?filtered.filter(e=>e.base_score>=sRank.min_score).length:0;
+
+  const rulebookHtml=`<div class="rulebook">
+    <div style="font-size:14px;font-weight:900;margin-bottom:10px">📖 査定ルールブック</div>
+    <div class="rule-block">
+      <h4>本評価の判定</h4>
+      <div style="font-size:12px;font-weight:700;color:#0f172a">◎＝4点 / ○＝2点 / △＝0点</div>
+      <div style="font-size:12px;font-weight:700;color:#0f172a">全${items.length}項目・${maxScore}点満点</div>
+    </div>
+    <div class="rule-block">
+      <h4>ランク基準</h4>
+      ${[...rankSettings].sort((a,b)=>b.min_score-a.min_score).map(r=>`
+      <div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+        <span style="display:inline-flex;width:28px;height:28px;border-radius:50%;border:2px solid #1e293b;background:${rankBg(r.rank)};align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">${r.rank}</span>
+        <span style="font-size:12px;font-weight:700">${r.min_score}点以上${r.pay_up>0?' ／ +'+r.pay_up+'円':''}</span>
+      </div>`).join('')}
+    </div>
+    <div class="rule-block">
+      <h4>特殊能力補正</h4>
+      ${traits.map(t=>`<div style="font-size:12px;font-weight:700;padding:1px 0">${t.name}：<span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span></div>`).join('')}
+    </div>
+  </div>`;
+
+  let html=`<div class="card">
+    <div class="card-header">
+      <div>
+        <div style="font-size:17px;font-weight:900;color:#0f172a">パワフルスタッフ査定</div>
+        <div style="font-size:10px;font-weight:700;color:#475569">店長管理画面</div>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        <div class="stat-box"><div class="num">${total}</div><div class="lbl">件数</div></div>
+        <div class="stat-box"><div class="num">${avg}</div><div class="lbl">平均</div></div>
+        <div class="stat-box"><div class="num">${sCount}</div><div class="lbl">S以上</div></div>
+        <button class="btn btn-ghost btn-sm" onclick="loadAll()">🔄</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab ${tab==='list'?'active':''}" onclick="S.tab='list';render()">📋 一覧</button>
+      <button class="tab ${tab==='new'?'active':''}" onclick="S.tab='new';if(!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''}};render()">${editId?'✏️':'＋'} 入力</button>
+      <button class="tab ${tab==='settings'?'active':''}" onclick="S.tab='settings';render()">⭐ 能力設定</button>
+      <button class="tab ${tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
+      <button class="tab ${tab==='ranks'?'active':''}" onclick="S.tab='ranks';render()">🏆 ランク</button>
+      <button class="tab ${tab==='master'?'active':''}" onclick="S.tab='master';render()">⚙️ 基本設定</button>
+    </div>
+  </div>`;
+
+  // 自己採点URL案内（常に表示）
+  html+=`<div class="self-link-box">
+    <div style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">📱 スタッフ自己採点ページ</div>
+    <div style="font-size:12px;font-weight:700;color:#047857;margin-bottom:8px">このURLをスタッフに送るだけで自己採点できます</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;background:#fff;border:1.5px solid #059669;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;color:#0f172a;word-break:break-all">${location.origin}/self.html</div>
+      <button class="btn btn-sm" style="background:#059669;color:#fff;border-color:#059669;white-space:nowrap" onclick="copyUrl()">📋 コピー</button>
+    </div>
+  </div>`;
+
+  // ===== 一覧 =====
+  if(tab==='list'){
+    html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <input style="flex:1;min-width:140px" placeholder="名前・店舗で検索" value="${search}" oninput="S.search=this.value;render()">
+      <select style="width:auto;min-width:100px" onchange="S.storeF=this.value;render()">
+        <option value="all">全店舗</option>
+        ${stores.map(s=>`<option value="${s.id}" ${storeF===s.id?'selected':''}>${s.name}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="S.tab='new';S.editId=null;S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">＋ 新規</button>
+    </div>`;
+    html+=`<div style="display:flex;gap:8px;margin-bottom:10px"><select style="flex:1" onchange="S.periodF=this.value;render()"><option value="all">📅 全期間</option>${[...new Map(evals.map(e=>[e.period_id,(periods.find(p=>p.id===e.period_id)||{}).label||'未設定'])).entries()].map(([id,label])=>`<option value="${id}" ${(S.periodF||'all')===id?'selected':''}>${label}</option>`).join('')}</select><select style="flex:1" onchange="S.listFilter=this.value;render()"><option value="all">👥 全種別</option><option value="manager" ${(S.listFilter||'all')==='manager'?'selected':''}>👔 店長評価</option><option value="self" ${(S.listFilter||'all')==='self'?'selected':''}>🙋 自己採点</option></select></div>`;
+    if(!filtered.length){
+      html+=`<div class="card" style="padding:40px;text-align:center">
+        <div style="font-size:36px;margin-bottom:10px">📋</div>
+        <div style="font-weight:900;color:#64748b">評価データがありません</div>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="S.tab='new';render()">評価を入力する</button>
+      </div>`;
+    }else{
+      filtered.forEach(ev=>{
+        const sName=(stores.find(s=>s.id===ev.store_id)||{}).name||'未設定';
+        const pLabel=(periods.find(p=>p.id===ev.period_id)||{}).label||'未設定';
+        const stName=ev.staff_members?.name||'未設定';
+        const evT=ev.evaluation_traits||[];
+        html+=`<div class="ev-card">
+          <div class="ev-header">
+            <div style="flex:1">
+              <div style="font-size:16px;font-weight:900">${stName}</div>
+              <div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${sName} / ${pLabel}</div>
+              <div style="font-size:10px;color:#94a3b8">評価者: ${ev.evaluator_name||'未設定'}</div>
+            </div>
+            <div class="rank-badge" style="background:${rankBg(ev.rank)}">${ev.rank}</div>
+          </div>
+          <div style="padding:10px 14px">
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:8px">
+              <div class="info-row"><span>本評価点</span><span>${ev.base_score}点</span></div>
+              <div class="info-row" style="color:#64748b"><span>特殊能力補正</span><span>${ev.trait_score>=0?'+':''}${ev.trait_score}</span></div>
+              <div class="info-row" style="color:#ea580c"><span>時給アップ</span><span>${ev.pay_delta>0?'+'+ev.pay_delta+'円':'なし'}</span></div>
+            </div>
+            ${evT.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${evT.map(t=>`<span style="border-radius:999px;border:1.5px solid #1e293b;padding:2px 8px;font-size:11px;font-weight:900;background:${(t.score||0)>0?'#fef9c3':'#fee2e2'}">${t.trait_name} ${(t.score||0)>0?'+':''}${t.score}</span>`).join('')}</div>`:''}
+            ${(ev.good_point||ev.improve_point||ev.next_goal)?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px">
+              ${ev.good_point?`<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#15803d">良い点</div><div style="font-size:11px;margin-top:1px">${ev.good_point}</div></div>`:''}
+              ${ev.improve_point?`<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#c2410c">改善点</div><div style="font-size:11px;margin-top:1px">${ev.improve_point}</div></div>`:''}
+              ${ev.next_goal?`<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#1d4ed8">次回目標</div><div style="font-size:11px;margin-top:1px">${ev.next_goal}</div></div>`:''}
+            </div>`:''}
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="startEdit('${ev.id}')">編集</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteEval('${ev.id}')">削除</button>
+            </div>
+          </div>
+        </div>`;
       });
     }
-
-    if(tab==='settings'){html+=`<div class="two-col"><div class="settings-panel"><h3>⭐ 特殊能力補正設定</h3>${traits.map(t=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${t.name}</span><span style="font-weight:900;color:${t.score>0?'#15803d':'#dc2626'};min-width:36px;text-align:right">${t.score>0?'+':''}${t.score}</span><button class="btn btn-danger btn-sm" onclick="delTrait('${t.id}')">削除</button></div>`).join('')}<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><input placeholder="特殊能力名" value="${S.newTrait}" oninput="S.newTrait=this.value" style="flex:1;min-width:110px"><input type="number" placeholder="点数" value="${S.newTraitScore}" oninput="S.newTraitScore=this.value" style="width:65px"><button class="btn btn-primary btn-sm" onclick="addTrait()">追加</button></div></div><div>${rulebookHtml}</div></div>`;}
-
-    if(tab==='items'){
-      html+=`<div class="settings-panel" style="margin-bottom:10px"><h3>＋ 新しいセクション</h3><div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center"><input placeholder="セクション名" value="${S.newSectionName}" oninput="S.newSectionName=this.value" style="flex:1;min-width:120px"><div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700">色:</span><input type="color" value="${S.newSectionColor}" oninput="S.newSectionColor=this.value" style="width:44px;height:36px;padding:2px;border-radius:8px;border:2px solid #1e293b"></div><button class="btn btn-primary btn-sm" onclick="addSection()">追加</button></div></div>`;
-      html+=`<div class="settings-panel" style="margin-bottom:10px"><h3>＋ 評価項目を追加</h3><div style="display:flex;flex-wrap:wrap;gap:7px"><select onchange="S.newItemSectionId=this.value" style="flex:1;min-width:130px"><option value="">セクションを選択</option>${sections.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select><input placeholder="項目名" value="${S.newItemLabel}" oninput="S.newItemLabel=this.value" style="flex:2;min-width:140px"><button class="btn btn-primary btn-sm" onclick="addItem()">追加</button></div></div>`;
-      sections.forEach(sec=>{const si=items.filter(it=>it.section_id===sec.id);html+=`<div class="section-card"><div class="section-card-header" style="background:${sec.color}"><input value="${sec.name}" style="flex:1;font-size:13px;font-weight:900;border:1.5px solid #94a3b8;border-radius:8px;padding:4px 8px;background:#fff" onblur="updateSection('${sec.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"><span style="font-size:10px;color:#475569;font-weight:500;white-space:nowrap;margin-left:6px">${si.length}項目・最大${si.length*4}点</span><button class="btn btn-danger btn-sm" onclick="delSection('${sec.id}')">削除</button></div><div class="section-card-body">${si.map(it=>`<div class="eval-item-row"><input value="${it.label}" style="flex:1;font-size:13px;font-weight:700;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 8px;background:#fff" onblur="updateItem('${it.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"><button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="delItem('${it.id}')">削除</button></div>`).join('')}${si.length===0?`<div style="color:#94a3b8;font-size:12px">項目がありません</div>`:''}</div></div>`;});
-    }
-
-    if(tab==='ranks'){html+=`<div class="two-col"><div class="settings-panel"><h3>🏆 ランク基準・時給アップ</h3><div style="font-size:11px;color:#64748b;margin-bottom:10px">最大評価点: <strong style="color:#0f172a">${maxScore}点</strong></div>${[...rankSettings].sort((a,b)=>b.min_score-a.min_score).map(r=>`<div class="rank-row" style="background:${rankBg(r.rank)}"><div style="width:40px;height:40px;border-radius:50%;border:2px solid #1e293b;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0">${r.rank}</div><div style="flex:1"><div style="font-size:10px;font-weight:900;color:#475569;margin-bottom:2px">最低点</div><input type="number" value="${r.min_score}" min="0" onchange="updateRank('${r.id}','min_score',this.value)" style="width:75px"></div><div style="flex:1"><div style="font-size:10px;font-weight:900;color:#475569;margin-bottom:2px">時給アップ(円)</div><input type="number" value="${r.pay_up}" min="0" onchange="updateRank('${r.id}','pay_up',this.value)" style="width:75px"></div><div style="font-size:13px;font-weight:900;color:#ea580c">${r.pay_up>0?'+'+r.pay_up+'円':'なし'}</div></div>`).join('')}<div style="margin-top:10px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;padding:8px;font-size:11px;font-weight:700;color:#92400e">⚠️ 変更後フォーカスを外すと自動保存</div></div><div>${rulebookHtml}</div></div>`;}
-
-    if(tab==='master'){html+=`<div class="two-col"><div><div class="settings-panel" style="margin-bottom:10px"><h3>🏪 店舗</h3>${stores.map(s=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${s.name}</span><button class="btn btn-danger btn-sm" onclick="delStore('${s.id}')">削除</button></div>`).join('')}<div style="display:flex;gap:6px;margin-top:8px"><input placeholder="新しい店舗名" value="${S.newStore}" oninput="S.newStore=this.value" style="flex:1"><button class="btn btn-primary btn-sm" onclick="addStore()">追加</button></div></div><div class="settings-panel"><h3>📅 評価期間</h3>${periods.map(p=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${p.label}</span><button class="btn btn-danger btn-sm" onclick="delPeriod('${p.id}')">削除</button></div>`).join('')}<div style="display:flex;gap:6px;margin-top:8px"><input placeholder="例: 2026年5月期" value="${S.newPeriod}" oninput="S.newPeriod=this.value" style="flex:1"><button class="btn btn-primary btn-sm" onclick="addPeriod()">追加</button></div></div></div><div class="settings-panel"><h3>👤 スタッフ</h3>${members.map(m=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${m.name}</span><span style="font-size:10px;color:#64748b;margin-right:4px">${(stores.find(s=>s.id===m.store_id)||{}).name||''}</span><button class="btn btn-danger btn-sm" onclick="delMember('${m.id}')">削除</button></div>`).join('')}<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><input placeholder="スタッフ名" value="${S.newMemberName}" oninput="S.newMemberName=this.value" style="flex:1;min-width:90px"><select style="flex:1;min-width:90px" onchange="S.newMemberStore=this.value"><option value="">店舗を選択</option>${stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select><button class="btn btn-primary btn-sm" onclick="addMember()">追加</button></div></div></div>`;}
-
-    document.getElementById('app').innerHTML=html;
   }
-  loadAll();
+
+  // ===== 評価入力 =====
+  if(tab==='new'){
+    html+=`<div class="form-layout">
+    <div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:12px 16px;font-size:16px;font-weight:900">${editId?'評価を編集':'新規評価入力'}</div>
+      <div style="padding:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">スタッフ名</div>
+            <select onchange="applyMember(this.value)">
+              <option value="">選択</option>
+              ${members.map(m=>`<option value="${m.id}" ${form.memberId===m.id?'selected':''}>${m.name}</option>`).join('')}
+            </select></div>
+          <div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">店舗</div>
+            <select onchange="S.form.storeId=this.value;render()">
+              <option value="">選択</option>
+              ${stores.map(s=>`<option value="${s.id}" ${form.storeId===s.id?'selected':''}>${s.name}</option>`).join('')}
+            </select></div>
+          <div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">評価期間</div>
+            <select onchange="S.form.periodId=this.value;render()">
+              <option value="">選択</option>
+              ${periods.map(p=>`<option value="${p.id}" ${form.periodId===p.id?'selected':''}>${p.label}</option>`).join('')}
+            </select></div>
+          <div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">評価者</div>
+            <input value="${form.evaluator}" placeholder="評価者名" oninput="S.form.evaluator=this.value"></div>
+        </div>
+        ${sections.map(sec=>{
+          const si=items.filter(it=>it.section_id===sec.id);
+          const ss=si.reduce((s,it)=>s+Number(form.vals[it.id]||0),0);
+          const mx=si.length*4;
+          return`<div class="section-block" style="background:${sec.color}">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:13px;font-weight:900">${sec.name}</span>
+              <span style="font-size:12px;font-weight:900;color:#475569">${ss}/${mx}</span>
+            </div>
+            <div class="progress"><div class="progress-fill" style="width:${mx?ss/mx*100:0}%"></div></div>
+            <div style="margin-top:8px">
+              ${si.map(it=>{const cur=form.vals[it.id]||0;return`<div class="item-row">
+                <span class="item-label">${it.label}</span>
+                <select style="width:100px;flex-shrink:0" onchange="S.form.vals['${it.id}']=Number(this.value);render()">
+                  <option value="4" ${cur==4?'selected':''}>◎ 4点</option>
+                  <option value="2" ${cur==2?'selected':''}>○ 2点</option>
+                  <option value="0" ${cur==0?'selected':''}>△ 0点</option>
+                </select>
+              </div>`;}).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+        <div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:10px">
+          <div style="font-weight:900;font-size:13px;margin-bottom:8px">特殊能力補正</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${traits.map(t=>`<button class="trait-btn ${form.selTraits.includes(t.name)?'on':''}" onclick="const i=S.form.selTraits.indexOf('${t.name}');if(i>=0)S.form.selTraits.splice(i,1);else S.form.selTraits.push('${t.name}');render()">${t.name} <span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span></button>`).join('')}
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px">
+          ${[['good','良い点','強み'],['improve','改善点','改善点'],['goal','次回目標','目標']].map(([k,l,ph])=>`
+          <div style="border:2px solid #1e293b;border-radius:10px;padding:8px">
+            <div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:4px">${l}</div>
+            <input value="${(form[k]||'').replace(/"/g,'&quot;')}" placeholder="${ph}" oninput="S.form['${k}']=this.value" style="font-size:12px;padding:6px 8px">
+          </div>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="saveEval()">${editId?'更新する':'保存する'}</button>
+          <button class="btn btn-ghost" onclick="S.tab='list';S.editId=null;render()">キャンセル</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:13px;font-weight:900">プレビュー</div>
+        <div style="padding:12px">
+          <div style="border:2px solid #1e293b;border-radius:12px;padding:10px;background:${rankBg(rank)};display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div><div style="font-size:10px;font-weight:900;color:#475569">ランク</div><div style="font-size:36px;font-weight:900">${rank}</div></div>
+            <div style="text-align:right"><div style="font-size:10px;font-weight:900;color:#475569">本評価点</div><div style="font-size:28px;font-weight:900">${base}</div></div>
+          </div>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:8px">
+            <div class="info-row"><span>特殊能力補正</span><span>${tScore>=0?'+':''}${tScore}</span></div>
+            <div class="info-row" style="color:#ea580c"><span>時給アップ</span><span>${rObj.pay_up>0?'+'+rObj.pay_up+'円':'なし'}</span></div>
+          </div>
+          ${sections.map(sec=>{
+            const si=items.filter(it=>it.section_id===sec.id);
+            const sc=si.reduce((s,it)=>s+Number(form.vals[it.id]||0),0);
+            const mx=si.length*4;
+            return`<div style="margin-bottom:5px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:900;color:#475569;margin-bottom:1px"><span>${sec.name}</span><span>${sc}/${mx}</span></div>
+              <div class="progress"><div class="progress-fill" style="width:${mx?sc/mx*100:0}%"></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      ${rulebookHtml}
+    </div>
+    </div>`;
+  }
+
+  // ===== 能力設定 =====
+  if(tab==='settings'){
+    html+=`<div class="two-col">
+    <div class="settings-panel">
+      <h3>⭐ 特殊能力補正設定</h3>
+      ${traits.map(t=>`<div class="master-row">
+        <span style="flex:1;font-size:13px;font-weight:700">${t.name}</span>
+        <span style="font-weight:900;color:${t.score>0?'#15803d':'#dc2626'};min-width:36px;text-align:right">${t.score>0?'+':''}${t.score}</span>
+        <button class="btn btn-danger btn-sm" onclick="delTrait('${t.id}')">削除</button>
+      </div>`).join('')}
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <input placeholder="特殊能力名" value="${S.newTrait}" oninput="S.newTrait=this.value" style="flex:1;min-width:110px">
+        <input type="number" placeholder="点数" value="${S.newTraitScore}" oninput="S.newTraitScore=this.value" style="width:65px">
+        <button class="btn btn-primary btn-sm" onclick="addTrait()">追加</button>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">プラスでボーナス、マイナスでペナルティ</div>
+    </div>
+    <div>${rulebookHtml}</div>
+    </div>`;
+  }
+
+  // ===== 評価項目 =====
+  if(tab==='items'){
+    html+=`<div class="settings-panel" style="margin-bottom:10px">
+      <h3>＋ 新しいセクション</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center">
+        <input placeholder="セクション名" value="${S.newSectionName}" oninput="S.newSectionName=this.value" style="flex:1;min-width:120px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:11px;font-weight:700">色:</span>
+          <input type="color" value="${S.newSectionColor}" oninput="S.newSectionColor=this.value" style="width:44px;height:36px;padding:2px;border-radius:8px">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addSection()">追加</button>
+      </div>
+    </div>
+    <div class="settings-panel" style="margin-bottom:10px">
+      <h3>＋ 評価項目を追加</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:7px">
+        <select onchange="S.newItemSectionId=this.value" style="flex:1;min-width:130px">
+          <option value="">セクションを選択</option>
+          ${sections.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+        <input placeholder="項目名" value="${S.newItemLabel}" oninput="S.newItemLabel=this.value" style="flex:2;min-width:140px">
+        <button class="btn btn-primary btn-sm" onclick="addItem()">追加</button>
+      </div>
+    </div>
+    ${sections.map(sec=>{
+      const si=items.filter(it=>it.section_id===sec.id);
+      return`<div class="section-card">
+        <div class="section-card-header" style="background:${sec.color}">
+          <span>${sec.name} <span style="font-size:10px;color:#475569;font-weight:500">${si.length}項目・最大${si.length*4}点</span></span>
+          <button class="btn btn-danger btn-sm" onclick="delSection('${sec.id}')">削除</button>
+        </div>
+        <div class="section-card-body">
+          ${si.map(it=>`<div class="eval-item-row">
+            <input value="${it.label.replace(/"/g,'&quot;')}" style="flex:1;font-size:13px;font-weight:700;border:1.5px solid #e2e8f0;border-radius:8px;padding:4px 8px;background:#fff" onblur="updateItem('${it.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+            <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="delItem('${it.id}')">削除</button>
+          </div>`).join('')}
+          ${si.length===0?`<div style="color:#94a3b8;font-size:12px">項目がありません</div>`:''}
+        </div>
+      </div>`;
+    }).join('')}`;
+  }
+
+  // ===== ランク設定 =====
+  if(tab==='ranks'){
+    html+=`<div class="two-col">
+    <div class="settings-panel">
+      <h3>🏆 ランク基準・時給アップ</h3>
+      <div style="font-size:11px;color:#64748b;margin-bottom:10px">最大評価点: <strong style="color:#0f172a">${maxScore}点</strong>（${items.length}項目×4点）</div>
+      ${[...rankSettings].sort((a,b)=>b.min_score-a.min_score).map(r=>`
+      <div class="rank-row" style="background:${rankBg(r.rank)}">
+        <div style="width:40px;height:40px;border-radius:50%;border:2px solid #1e293b;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0">${r.rank}</div>
+        <div style="flex:1">
+          <div style="font-size:10px;font-weight:900;color:#475569;margin-bottom:2px">最低点</div>
+          <input type="number" value="${r.min_score}" min="0" onchange="updateRank('${r.id}','min_score',this.value)" style="width:75px">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10px;font-weight:900;color:#475569;margin-bottom:2px">時給アップ(円)</div>
+          <input type="number" value="${r.pay_up}" min="0" onchange="updateRank('${r.id}','pay_up',this.value)" style="width:75px">
+        </div>
+        <div style="font-size:13px;font-weight:900;color:#ea580c">${r.pay_up>0?'+'+r.pay_up+'円':'なし'}</div>
+      </div>`).join('')}
+      <div style="margin-top:10px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;padding:8px;font-size:11px;font-weight:700;color:#92400e">
+        ⚠️ 変更後はフォーカスを外すと自動保存されます
+      </div>
+    </div>
+    <div>${rulebookHtml}</div>
+    </div>`;
+  }
+
+  // ===== 基本設定 =====
+  if(tab==='master'){
+    html+=`<div class="two-col">
+    <div>
+      <div class="settings-panel" style="margin-bottom:10px">
+        <h3>🏪 店舗</h3>
+        ${stores.map(s=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${s.name}</span><button class="btn btn-danger btn-sm" onclick="delStore('${s.id}')">削除</button></div>`).join('')}
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input placeholder="新しい店舗名" value="${S.newStore}" oninput="S.newStore=this.value" style="flex:1">
+          <button class="btn btn-primary btn-sm" onclick="addStore()">追加</button>
+        </div>
+      </div>
+      <div class="settings-panel">
+        <h3>📅 評価期間</h3>
+        ${periods.map(p=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${p.label}</span><button class="btn btn-danger btn-sm" onclick="delPeriod('${p.id}')">削除</button></div>`).join('')}
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input placeholder="例: 2026年5月期" value="${S.newPeriod}" oninput="S.newPeriod=this.value" style="flex:1">
+          <button class="btn btn-primary btn-sm" onclick="addPeriod()">追加</button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-panel">
+      <h3>👤 スタッフ</h3>
+      ${members.map(m=>`<div class="master-row">
+        <span style="flex:1;font-size:13px;font-weight:700">${m.name}</span>
+        <span style="font-size:10px;color:#64748b;margin-right:4px">${(stores.find(s=>s.id===m.store_id)||{}).name||''}</span>
+        <button class="btn btn-danger btn-sm" onclick="delMember('${m.id}')">削除</button>
+      </div>`).join('')}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        <input placeholder="スタッフ名" value="${S.newMemberName}" oninput="S.newMemberName=this.value" style="flex:1;min-width:90px">
+        <select style="flex:1;min-width:90px" onchange="S.newMemberStore=this.value">
+          <option value="">店舗を選択</option>
+          ${stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="addMember()">追加</button>
+      </div>
+    </div>
+    </div>`;
+  }
+
+  document.getElementById('app').innerHTML=html;
 }
+loadAll();
 </script>
 </body>
 </html>
