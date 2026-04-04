@@ -405,7 +405,7 @@ render=function(){
             <div style="margin-top:8px">
               ${si.map(it=>{const cur=form.vals[it.id]||0;return`<div class="item-row">
                 <span class="item-label">${it.label}</span>
-                <select style="width:100px;flex-shrink:0" onchange="S.form.vals['${it.id}']=Number(this.value);render()">
+                <select style="width:100px;flex-shrink:0" data-mgr-item="${it.id}" onchange="S.form.vals[this.getAttribute('data-mgr-item')]=Number(this.value);render()">
                   <option value="4" ${cur==4?'selected':''}>◎ 4点</option>
                   <option value="2" ${cur==2?'selected':''}>○ 2点</option>
                   <option value="0" ${cur==0?'selected':''}>△ 0点</option>
