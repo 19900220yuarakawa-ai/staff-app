@@ -68,6 +68,7 @@ function showToast(msg,err=false){
   t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);
 }
 
+var render;
 let S={
   tab:'list',loading:true,
   stores:[],periods:[],members:[],traits:[],evals:[],
@@ -233,7 +234,7 @@ function copyUrl(){
   navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>showToast(url));
 }
 
-function render(){
+render=function(){
   const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF}=S;
   if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
 
