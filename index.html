@@ -636,6 +636,8 @@ loadAll();
 <script>
 (function(){
   if(!location.search.includes('self'))return;
+  window.selectMember=function(val){var m=sD.members.find(function(x){return x.id===val});if(m){sMemberId=m.id;sStoreId=m.store_id;}else{sMemberId='';sStoreId='';}sRender();};
+  window.selectPeriod=function(val){sPeriodId=val;sRender();};
   window.updateSelfScore=function(id,val){sVals[id]=Number(val);sRender();};
   
   // 管理画面を非表示にして自己採点画面を表示
@@ -726,13 +728,13 @@ loadAll();
     html+='<div style="padding:14px">';
     // 名前選択
     html+='<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">あなたの名前</div>';
-    html+='<select onchange="var m=sD.members.find(function(x){return x.id===this.value}.bind(this));if(m){sMemberId=m.id;sStoreId=m.store_id;}else{sMemberId=\'\';sStoreId=\'\';}">';
+    html+='<select onchange="selectMember(this.value)">';
     html+='<option value="">選択してください</option>';
     sD.members.forEach(function(m){html+='<option value="'+m.id+'"'+(sMemberId===m.id?' selected':'')+'>'+m.name+'</option>';});
     html+='</select></div>';
     // 評価期間選択
     html+='<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">評価期間</div>';
-    html+='<select onchange="sPeriodId=this.value">';
+    html+='<select onchange="selectPeriod(this.value)">';
     html+='<option value="">選択してください</option>';
     sD.periods.forEach(function(p){html+='<option value="'+p.id+'"'+(sPeriodId===p.id?' selected':'')+'>'+p.label+'</option>';});
     html+='</select></div>';
@@ -801,4 +803,3 @@ loadAll();
 </script>
 </body>
 </html>
-
