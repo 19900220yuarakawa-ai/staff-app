@@ -252,7 +252,9 @@ render=function(){
     const name=e.staff_members?.name||'';
     const store=(stores.find(s=>s.id===e.store_id)||{}).name||'';
     const period=(periods.find(p=>p.id===e.period_id)||{}).label||'';
-    return ok&&(!q||[name,store,period,e.evaluator_name].some(v=>(v||'').includes(q)));
+    const pOk=(S.periodF||'all')==='all'||e.period_id===S.periodF;
+    const lOk=(S.listFilter||'all')==='all'||e.evaluation_type===(S.listFilter==='manager'?'manager':'self');
+    return ok&&pOk&&lOk&&(!q||[name,store,period,e.evaluator_name].some(v=>(v||'').includes(q)));
   }).sort((a,b)=>b.base_score-a.base_score);
 
   const total=filtered.length;
@@ -529,6 +531,57 @@ render=function(){
   }
 
   // ===== ランク設定 =====
+
+  if(tab==='compare'){
+    const mgE=evals.filter(e=>e.evaluation_type==='manager');
+    const sfE=evals.filter(e=>e.evaluation_type==='self');
+    const pairs=[];
+    mgE.forEach(mg=>{const sf=sfE.find(s=>s.staff_member_id===mg.staff_member_id&&s.period_id===mg.period_id);if(sf)pairs.push({mg,sf});});
+    html+=`<div style="margin-bottom:10px;font-size:13px;font-weight:700;color:#475569">店長評価と自己採点が両方ある ${pairs.length} 件</div>`;
+    if(!pairs.length){
+      html+=`<div class="card" style="padding:40px;text-align:center"><div style="font-size:36px;margin-bottom:10px">📊</div><div style="font-weight:900;color:#64748b">比較できるデータがありません</div><div style="font-size:12px;color:#94a3b8;margin-top:6px">店長評価と自己採点が両方揃うと表示されます</div></div>`;
+    }
+    pairs.forEach(({mg,sf})=>{
+      const staffName=mg.staff_members?.name||'未設定';
+      const storeName=(stores.find(s=>s.id===mg.store_id)||{}).name||'未設定';
+      const periodLabel=(periods.find(p=>p.id===mg.period_id)||{}).label||'未設定';
+      const diff=(mg.base_score+mg.trait_score)-(sf.base_score+sf.trait_score);
+      const dc=diff>0?'#15803d':diff<0?'#dc2626':'#475569';
+      const mgS={};const sfS={};
+      (mg.evaluation_item_scores||[]).forEach(r=>{const it=items.find(x=>x.id===r.item_key);if(it){const sec=sections.find(s=>s.id===it.section_id);if(sec)mgS[sec.id]=(mgS[sec.id]||0)+Number(r.score||0);}});
+      (sf.evaluation_item_scores||[]).forEach(r=>{const it=items.find(x=>x.id===r.item_key);if(it){const sec=sections.find(s=>s.id===it.section_id);if(sec)sfS[sec.id]=(sfS[sec.id]||0)+Number(r.score||0);}});
+      html+=`<div class="ev-card" style="margin-bottom:14px">
+        <div class="ev-header" style="background:linear-gradient(90deg,#dbeafe,#fef9c3)">
+          <div style="flex:1"><div style="font-size:16px;font-weight:900">${staffName}</div><div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${storeName} / ${periodLabel}</div></div>
+        </div>
+        <div style="padding:12px 14px">
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:12px">
+            <div style="background:#dbeafe;border:2px solid #1e293b;border-radius:12px;padding:10px;text-align:center">
+              <div style="font-size:10px;font-weight:900;color:#1d4ed8;margin-bottom:2px">👔 店長評価</div>
+              <div style="font-size:28px;font-weight:900">${mg.base_score+mg.trait_score}</div>
+              <div style="font-size:10px;color:#64748b">本評価${mg.base_score}+補正${mg.trait_score}</div>
+              <div style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;border:2px solid #1e293b;background:${rankBg(mg.rank)};font-size:12px;font-weight:900;margin-top:4px">${mg.rank}</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:20px;font-weight:900;color:${dc}">${diff>=0?'+':''}${diff}</div>
+              <div style="font-size:10px;font-weight:700;color:${dc};margin-top:2px">${diff>0?'店長が高い':diff<0?'自己が高い':'一致'}</div>
+            </div>
+            <div style="background:#fef9c3;border:2px solid #1e293b;border-radius:12px;padding:10px;text-align:center">
+              <div style="font-size:10px;font-weight:900;color:#92400e;margin-bottom:2px">🙋 自己採点</div>
+              <div style="font-size:28px;font-weight:900">${sf.base_score+sf.trait_score}</div>
+              <div style="font-size:10px;color:#64748b">本評価${sf.base_score}+補正${sf.trait_score}</div>
+              <div style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;border:2px solid #1e293b;background:${rankBg(sf.rank)};font-size:12px;font-weight:900;margin-top:4px">${sf.rank}</div>
+            </div>
+          </div>
+          <div style="border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
+            <div style="font-size:11px;font-weight:900;color:#475569;margin-bottom:8px">セクション別ギャップ</div>
+            ${sections.map(sec=>{const si=items.filter(it=>it.section_id===sec.id);const mx=si.length*4;const ms=mgS[sec.id]||0;const ss2=sfS[sec.id]||0;const gap=ms-ss2;const gc=gap>0?'#15803d':gap<0?'#dc2626':'#94a3b8';return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:11px;font-weight:900">${sec.name}</span><span style="font-size:11px;font-weight:900;color:${gc}">${gap>=0?'+':''}${gap}点</span></div><div style="display:grid;gap:3px"><div style="display:flex;align-items:center;gap:4px"><span style="font-size:9px;font-weight:700;color:#1d4ed8;width:28px;flex-shrink:0">店長</span><div style="flex:1;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden"><div style="height:100%;background:#3b82f6;border-radius:4px;width:${mx?ms/mx*100:0}%"></div></div><span style="font-size:10px;font-weight:900;width:24px;text-align:right">${ms}</span></div><div style="display:flex;align-items:center;gap:4px"><span style="font-size:9px;font-weight:700;color:#92400e;width:28px;flex-shrink:0">自己</span><div style="flex:1;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden"><div style="height:100%;background:#fbbf24;border-radius:4px;width:${mx?ss2/mx*100:0}%"></div></div><span style="font-size:10px;font-weight:900;width:24px;text-align:right">${ss2}</span></div></div></div>`;}).join('')}
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
   if(tab==='ranks'){
     html+=`<div class="two-col">
     <div class="settings-panel">
