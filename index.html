@@ -208,6 +208,15 @@ async function addItem(){
   S.newItemLabel='';showToast('追加しました');await loadAll();
 }
 async function delItem(id){if(!confirm('削除しますか？'))return;await sb.from('eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+async function updateSection(id, name){
+  name=name.trim();
+  if(!name){showToast('セクション名を入力してください',true);return;}
+  try{
+    await sb.from('eval_sections').update({name}).eq('id',id);
+    showToast('更新しました');
+    await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
 async function updateItem(id, label){
   label=label.trim();
   if(!label){showToast('項目名を入力してください',true);return;}
@@ -499,7 +508,8 @@ function render(){
       const si=items.filter(it=>it.section_id===sec.id);
       return`<div class="section-card">
         <div class="section-card-header" style="background:${sec.color}">
-          <span>${sec.name} <span style="font-size:10px;color:#475569;font-weight:500">${si.length}項目・最大${si.length*4}点</span></span>
+          <input value="${sec.name}" style="flex:1;font-size:13px;font-weight:900;border:1.5px solid #94a3b8;border-radius:8px;padding:4px 8px;background:#fff" onblur="updateSection('${sec.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+          <span style="font-size:10px;color:#475569;font-weight:500;white-space:nowrap">${si.length}項目・最大${si.length*4}点</span>
           <button class="btn btn-danger btn-sm" onclick="delSection('${sec.id}')">削除</button>
         </div>
         <div class="section-card-body">
