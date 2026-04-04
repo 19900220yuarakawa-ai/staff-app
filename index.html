@@ -634,6 +634,7 @@ loadAll();
 <script>
 (function(){
   if(!location.search.includes('self'))return;
+  window.updateSelfScore=function(id,val){sVals[id]=Number(val);sRender();};
   
   // 管理画面を非表示にして自己採点画面を表示
   document.getElementById('self-page').style.display='block';
@@ -753,7 +754,7 @@ loadAll();
       si.forEach(function(it){
         var cur=sVals[it.id]||0;
         html+='<div class="ir"><span style="flex:1;font-size:13px;font-weight:700;line-height:1.4;color:#0f172a">'+it.label+'</span>';
-        html+='<select class="ss" data-sid="'+it.id+'" onchange="var s=this;sVals[s.dataset.sid]=Number(s.value);sRender()">';
+        html+='<select class="ss" data-sid="'+it.id+'" onchange="updateSelfScore(this.dataset.sid,this.value)">';
         html+='<option value="4"'+(cur==4?' selected':'')+'>◎ 4点</option>';
         html+='<option value="2"'+(cur==2?' selected':'')+'>○ 2点</option>';
         html+='<option value="0"'+(cur==0?' selected':'')+'>△ 0点</option>';
