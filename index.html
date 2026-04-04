@@ -229,7 +229,7 @@ async function updateItem(id, label){
 async function updateRank(id,field,val){await sb.from('rank_settings').update({[field]:Number(val)}).eq('id',id);await loadAll();}
 
 function copyUrl(){
-  const url=location.origin+'/self.html';
+  const url=location.origin+location.pathname+'?self';
   navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>showToast(url));
 }
 
@@ -294,6 +294,7 @@ function render(){
     <div class="tabs">
       <button class="tab ${tab==='list'?'active':''}" onclick="S.tab='list';render()">📋 一覧</button>
       <button class="tab ${tab==='new'?'active':''}" onclick="S.tab='new';if(!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''}};render()">${editId?'✏️':'＋'} 入力</button>
+      <button class="tab ${tab==='compare'?'active':''}" onclick="S.tab='compare';render()">📊 比較</button>
       <button class="tab ${tab==='settings'?'active':''}" onclick="S.tab='settings';render()">⭐ 能力設定</button>
       <button class="tab ${tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
       <button class="tab ${tab==='ranks'?'active':''}" onclick="S.tab='ranks';render()">🏆 ランク</button>
@@ -593,6 +594,176 @@ function render(){
   document.getElementById('app').innerHTML=html;
 }
 loadAll();
+</script>
+
+<div id="self-page" style="display:none;font-family:'Hiragino Kaku Gothic Pro','Meiryo',sans-serif;background:#fef9c3;min-height:100vh;padding:12px">
+  <style>
+    #self-page *{box-sizing:border-box}
+    #self-page .card{background:#fff;border:2.5px solid #1e293b;border-radius:20px;overflow:hidden;margin-bottom:12px;box-shadow:0 4px 0 #1e293b;max-width:480px;margin-left:auto;margin-right:auto}
+    #self-page .top-bar{background:linear-gradient(90deg,#fde047,#38bdf8);border-bottom:2.5px solid #1e293b;padding:16px 18px;text-align:center}
+    #self-page select{border:2px solid #1e293b;border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px;background:#fff;color:#0f172a;width:100%;font-family:inherit;-webkit-appearance:none}
+    #self-page .sb{border:2px solid #1e293b;border-radius:14px;padding:12px;margin-bottom:8px}
+    #self-page .ir{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:5px}
+    #self-page .ss{width:96px;flex-shrink:0;padding:8px 6px;font-size:13px}
+    #self-page .send-btn{border:2.5px solid #1e293b;border-radius:16px;padding:16px;font-weight:900;font-size:16px;cursor:pointer;font-family:inherit;width:100%;background:#fde047;color:#0f172a;box-shadow:0 4px 0 #1e293b;max-width:480px;display:block;margin:0 auto}
+    #self-page .pr{height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:4px}
+    #self-page .pf{height:100%;background:#3b82f6;border-radius:4px}
+    #self-toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 24px;border-radius:14px;font-weight:700;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;max-width:90vw;text-align:center}
+    #self-toast.show{opacity:1}
+  </style>
+  <div id="self-toast"></div>
+  <div id="self-app"><div class="card"><div class="top-bar"><div style="font-size:22px;font-weight:900;color:#0f172a">🍢 スタッフ自己採点</div></div><div style="padding:30px;text-align:center;color:#64748b;font-weight:700">読み込み中...</div></div></div>
+</div>
+
+<script>
+(function(){
+  if(!location.search.includes('self'))return;
+  
+  // 管理画面を非表示にして自己採点画面を表示
+  document.getElementById('self-page').style.display='block';
+  document.querySelector('body').style.background='#fef9c3';
+  
+  // 管理画面のコンテンツを非表示
+  var toast=document.getElementById('toast');
+  var app=document.getElementById('app');
+  if(toast)toast.style.display='none';
+  if(app)app.style.display='none';
+
+  var sbSelf=supabase.createClient(
+    'https://zssovpegksskkgrkzbds.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc292cGVna3Nza2tncmt6YmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMDQ0MDUsImV4cCI6MjA5MDY4MDQwNX0.lSjNnhYePMJELZYVkLoEMK-B_k4LHnCmZeKkJxSQpXc',
+    {auth:{storageKey:'self-auth-v2',autoRefreshToken:false,persistSession:false}}
+  );
+
+  function sToast(msg,err){
+    var t=document.getElementById('self-toast');
+    t.textContent=msg;t.style.background=err?'#dc2626':'#0f172a';
+    t.classList.add('show');setTimeout(function(){t.classList.remove('show')},3000);
+  }
+
+  var sD={members:[],periods:[],sections:[],items:[],rankSettings:[],traits:[]};
+  var sMemberId='',sPeriodId='',sStoreId='',sVals={},sTraits=[];
+
+  function sRankOf(sc){
+    var sorted=sD.rankSettings.slice().sort(function(a,b){return b.min_score-a.min_score});
+    for(var i=0;i<sorted.length;i++){if(sc>=sorted[i].min_score)return sorted[i];}
+    return sorted[sorted.length-1]||{rank:'D',pay_up:0};
+  }
+  function sRankBg(r){return{SS:'#e9d5ff',S:'#fde047','A+':'#fed7aa',A:'#bbf7d0',B:'#bfdbfe',C:'#e2e8f0',D:'#fecaca'}[r]||'#e2e8f0';}
+  function sCalc(){return Object.values(sVals).reduce(function(s,v){return s+Number(v||0)},0);}
+  function sEmptyVals(){var o={};sD.items.forEach(function(it){o[it.id]=0});return o;}
+
+  async function sLoad(){
+    try{
+      var res=await Promise.all([
+        sbSelf.from('staff_members').select('*').eq('active',true).order('name'),
+        sbSelf.from('evaluation_periods').select('*').eq('is_open',true).order('start_date',{ascending:false}),
+        sbSelf.from('eval_sections').select('*').eq('is_active',true).order('sort_order'),
+        sbSelf.from('eval_items').select('*').eq('is_active',true).order('sort_order'),
+        sbSelf.from('rank_settings').select('*').order('sort_order'),
+        sbSelf.from('trait_options').select('*').eq('is_active',true).order('sort_order'),
+      ]);
+      sD.members=res[0].data||[];sD.periods=res[1].data||[];sD.sections=res[2].data||[];
+      sD.items=res[3].data||[];sD.rankSettings=res[4].data||[];sD.traits=res[5].data||[];
+      sVals=sEmptyVals();
+    }catch(e){sToast('読み込みエラー: '+e.message,true);}
+    sRender();
+  }
+
+  async function sSubmit(){
+    if(!sMemberId||!sPeriodId){sToast('名前と評価期間を選んでください',true);return;}
+    var sc=sCalc();var rObj=sRankOf(sc);
+    var tSc=sTraits.reduce(function(s,t){var f=sD.traits.find(function(o){return o.name===t});return s+(f?f.score:0)},0);
+    try{
+      var ins=await sbSelf.from('evaluations').insert({
+        staff_member_id:sMemberId,store_id:sStoreId,period_id:sPeriodId,
+        evaluation_type:'self',evaluator_name:'自己採点',
+        base_score:sc,trait_score:tSc,total_score:sc+tSc,rank:rObj.rank,pay_delta:rObj.pay_up
+      }).select().single();
+      if(ins.error)throw ins.error;
+      var eid=ins.data.id;
+      var rows=Object.entries(sVals).map(function(e){
+        var it=sD.items.find(function(x){return x.id===e[0]});
+        var sec=sD.sections.find(function(x){return x.id===(it?it.section_id:'')});
+        return{evaluation_id:eid,section_key:sec?sec.name:'',item_key:e[0],item_label:it?it.label:'',score:Number(e[1])};
+      });
+      if(rows.length)await sbSelf.from('evaluation_item_scores').insert(rows);
+      if(sTraits.length){
+        var trows=sTraits.map(function(name){
+          var f=sD.traits.find(function(o){return o.name===name});
+          return{evaluation_id:eid,trait_option_id:f?f.id:null,trait_name:name,score:Number(f?f.score:0)};
+        });
+        await sbSelf.from('evaluation_traits').insert(trows);
+      }
+      // 送信完了画面
+      document.getElementById('self-app').innerHTML='<div class="card"><div class="top-bar"><div style="font-size:20px;font-weight:900;color:#0f172a">✅ 送信完了！</div></div><div style="padding:30px;text-align:center"><div style="font-size:60px;margin-bottom:10px">🎉</div><div style="font-size:18px;font-weight:900;margin-bottom:8px">採点を送信しました</div><div style="font-size:14px;color:#64748b;font-weight:700">店長に結果が届きました！</div></div></div>';
+    }catch(e){sToast('送信エラー: '+e.message,true);}
+  }
+
+  function sRender(){
+    var sc=sCalc();var rObj=sRankOf(sc);var mx=sD.items.length*4;
+    var html='<div style="max-width:480px;margin:0 auto">';
+    html+='<div class="card"><div class="top-bar"><div style="font-size:22px;font-weight:900;color:#0f172a">🍢 スタッフ自己採点</div></div>';
+    html+='<div style="padding:14px">';
+    // 名前選択
+    html+='<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">あなたの名前</div>';
+    html+='<select onchange="var m=sD.members.find(function(x){return x.id===this.value}.bind(this));if(m){sMemberId=m.id;sStoreId=m.store_id;}else{sMemberId=\'\';sStoreId=\'\';}">';
+    html+='<option value="">選択してください</option>';
+    sD.members.forEach(function(m){html+='<option value="'+m.id+'"'+(sMemberId===m.id?' selected':'')+'>'+m.name+'</option>';});
+    html+='</select></div>';
+    // 評価期間選択
+    html+='<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">評価期間</div>';
+    html+='<select onchange="sPeriodId=this.value">';
+    html+='<option value="">選択してください</option>';
+    sD.periods.forEach(function(p){html+='<option value="'+p.id+'"'+(sPeriodId===p.id?' selected':'')+'>'+p.label+'</option>';});
+    html+='</select></div>';
+    // スコアプレビュー
+    html+='<div style="border:2.5px solid #1e293b;border-radius:16px;padding:12px;text-align:center;margin-bottom:12px;background:'+sRankBg(rObj.rank)+'">';
+    html+='<div style="font-size:11px;font-weight:900;color:#475569">現在のスコア</div>';
+    html+='<div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:6px">';
+    html+='<div><div style="font-size:48px;font-weight:900">'+sc+'</div><div style="font-size:11px;font-weight:700;color:#475569">'+mx+'点満点</div></div>';
+    html+='<div style="font-size:24px;color:#94a3b8">▶</div>';
+    html+='<div><div style="font-size:48px;font-weight:900">'+rObj.rank+'</div><div style="font-size:11px;font-weight:700;color:#475569">ランク</div></div>';
+    html+='</div></div>';
+    // セクションと項目
+    sD.sections.forEach(function(sec){
+      var si=sD.items.filter(function(it){return it.section_id===sec.id});
+      var ss=si.reduce(function(s,it){return s+Number(sVals[it.id]||0)},0);
+      var smx=si.length*4;
+      html+='<div class="sb" style="background:'+sec.color+'">';
+      html+='<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:14px;font-weight:900">'+sec.name+'</span><span style="font-size:12px;font-weight:900;color:#475569">'+ss+'/'+smx+'</span></div>';
+      html+='<div class="pr"><div class="pf" style="width:'+(smx?ss/smx*100:0)+'%"></div></div>';
+      html+='<div style="margin-top:8px">';
+      si.forEach(function(it){
+        var cur=sVals[it.id]||0;
+        html+='<div class="ir"><span style="flex:1;font-size:13px;font-weight:700;line-height:1.4;color:#0f172a">'+it.label+'</span>';
+        html+='<select class="ss" onchange="sVals[\''+it.id+'\']= Number(this.value);sRender()">';
+        html+='<option value="4"'+(cur==4?' selected':'')+'>◎ 4点</option>';
+        html+='<option value="2"'+(cur==2?' selected':'')+'>○ 2点</option>';
+        html+='<option value="0"'+(cur==0?' selected':'')+'>△ 0点</option>';
+        html+='</select></div>';
+      });
+      html+='</div></div>';
+    });
+    // 特殊能力
+    if(sD.traits.length){
+      html+='<div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:14px">';
+      html+='<div style="font-size:13px;font-weight:900;margin-bottom:8px">特殊能力（あてはまるものをタップ）</div>';
+      html+='<div style="display:flex;flex-wrap:wrap;gap:7px">';
+      sD.traits.forEach(function(t){
+        var on=sTraits.includes(t.name);
+        html+='<button style="border:2px solid '+(on?'#1e293b':'#94a3b8')+';border-radius:999px;padding:7px 14px;font-size:13px;font-weight:900;cursor:pointer;background:'+(on?'#fef08a':'#fff')+';color:'+(on?'#0f172a':'#64748b')+'" onclick="var i=sTraits.indexOf(\''+t.name+'\');if(i>=0)sTraits.splice(i,1);else sTraits.push(\''+t.name+'\');sRender()">'+t.name+' <span style="color:'+(t.score>0?'#15803d':'#dc2626')+'">'+(t.score>0?'+':'')+t.score+'</span></button>';
+      });
+      html+='</div></div>';
+    }
+    html+='<button class="send-btn" onclick="sSubmit()">📤 採点を送信する</button>';
+    html+='<div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">送信すると店長に結果が届きます</div>';
+    html+='</div></div></div>';
+    document.getElementById('self-app').innerHTML=html;
+  }
+
+  sLoad();
+})();
 </script>
 </body>
 </html>
