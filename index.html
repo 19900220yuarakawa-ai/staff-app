@@ -118,8 +118,8 @@ async function saveEval(){
   const f=S.form;
   if(!f.memberId||!f.storeId||!f.periodId){showToast('スタッフ・店舗・評価期間を選んでください',true);return;}
   const base=calcScore(f.vals);
-  const rObj=rankOf(base);
   const tScore=f.selTraits.reduce((s,t)=>s+(S.traits.find(o=>o.name===t)?.score||0),0);
+  const rObj=rankOf(base+tScore);
   const row={staff_member_id:f.memberId,store_id:f.storeId,period_id:f.periodId,
     evaluation_type:'manager',evaluator_name:f.evaluator,
     base_score:base,trait_score:tScore,total_score:base+tScore,
@@ -128,7 +128,8 @@ async function saveEval(){
   try{
     let evalId=S.editId;
     if(S.editId){
-      await sb.from('evaluations').update(row).eq('id',S.editId);
+      const{error:upErr}=await sb.from('evaluations').update(row).eq('id',S.editId);
+      if(upErr)throw upErr;
       await sb.from('evaluation_item_scores').delete().eq('evaluation_id',S.editId);
       await sb.from('evaluation_traits').delete().eq('evaluation_id',S.editId);
     }else{
@@ -350,6 +351,7 @@ render=function(){
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:8px">
               <div class="info-row"><span>本評価点</span><span>${ev.base_score}点</span></div>
               <div class="info-row" style="color:#64748b"><span>特殊能力補正</span><span>${ev.trait_score>=0?'+':''}${ev.trait_score}</span></div>
+              <div class="info-row" style="font-weight:900;color:#0f172a;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:2px"><span>合計点</span><span>${ev.base_score+ev.trait_score}点</span></div>
               <div class="info-row" style="color:#ea580c"><span>時給アップ</span><span>${ev.pay_delta>0?'+'+ev.pay_delta+'円':'なし'}</span></div>
             </div>
             ${evT.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${evT.map(t=>`<span style="border-radius:999px;border:1.5px solid #1e293b;padding:2px 8px;font-size:11px;font-weight:900;background:${(t.score||0)>0?'#fef9c3':'#fee2e2'}">${t.trait_name} ${(t.score||0)>0?'+':''}${t.score}</span>`).join('')}</div>`:''}
