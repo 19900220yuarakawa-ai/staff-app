@@ -307,7 +307,7 @@ function render(){
     <div style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">📱 スタッフ自己採点ページ</div>
     <div style="font-size:12px;font-weight:700;color:#047857;margin-bottom:8px">このURLをスタッフに送るだけで自己採点できます</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;background:#fff;border:1.5px solid #059669;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;color:#0f172a;word-break:break-all">${location.origin}/self.html</div>
+      <div style="flex:1;background:#fff;border:1.5px solid #059669;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;color:#0f172a;word-break:break-all">${location.origin+location.pathname}?self</div>
       <button class="btn btn-sm" style="background:#059669;color:#fff;border-color:#059669;white-space:nowrap" onclick="copyUrl()">📋 コピー</button>
     </div>
   </div>`;
