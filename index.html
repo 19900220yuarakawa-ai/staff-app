@@ -417,7 +417,7 @@ render=function(){
         <div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:10px">
           <div style="font-weight:900;font-size:13px;margin-bottom:8px">特殊能力補正</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px">
-            ${traits.map(t=>`<button class="trait-btn ${form.selTraits.includes(t.name)?'on':''}" onclick="const i=S.form.selTraits.indexOf('${t.name}');if(i>=0)S.form.selTraits.splice(i,1);else S.form.selTraits.push('${t.name}');render()">${t.name} <span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span></button>`).join('')}
+            <span id="trait-btns-wrap"></span>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px">
@@ -593,6 +593,22 @@ render=function(){
   }
 
   document.getElementById('app').innerHTML=html;
+  // 特殊能力ボタンを動的生成
+  var traitWrap=document.getElementById('trait-btns-wrap')||document.getElementById('trait-btns');
+  if(traitWrap){
+    traits.forEach(function(t){
+      var on=S.form.selTraits.includes(t.name);
+      var btn=document.createElement('button');
+      btn.className='trait-btn'+(on?' on':'');
+      btn.innerHTML=t.name+' <span style="color:'+(t.score>0?'#15803d':'#dc2626')+'">'+(t.score>0?'+':'')+t.score+'</span>';
+      btn.addEventListener('click',function(){
+        var i=S.form.selTraits.indexOf(t.name);
+        if(i>=0)S.form.selTraits.splice(i,1);else S.form.selTraits.push(t.name);
+        render();
+      });
+      traitWrap.appendChild(btn);
+    });
+  }
 }
 loadAll();
 </script>
@@ -738,7 +754,8 @@ loadAll();
       si.forEach(function(it){
         var cur=sVals[it.id]||0;
         html+='<div class="ir"><span style="flex:1;font-size:13px;font-weight:700;line-height:1.4;color:#0f172a">'+it.label+'</span>';
-        html+='<select class="ss" onchange="sVals[\''+it.id+'\']= Number(this.value);sRender()">';
+        var selId='sel-'+it.id;
+        html+='<select class="ss" id="'+selId+'" data-item-id="'+it.id+'">';
         html+='<option value="4"'+(cur==4?' selected':'')+'>◎ 4点</option>';
         html+='<option value="2"'+(cur==2?' selected':'')+'>○ 2点</option>';
         html+='<option value="0"'+(cur==0?' selected':'')+'>△ 0点</option>';
@@ -750,17 +767,38 @@ loadAll();
     if(sD.traits.length){
       html+='<div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:14px">';
       html+='<div style="font-size:13px;font-weight:900;margin-bottom:8px">特殊能力（あてはまるものをタップ）</div>';
-      html+='<div style="display:flex;flex-wrap:wrap;gap:7px">';
-      sD.traits.forEach(function(t){
-        var on=sTraits.includes(t.name);
-        html+='<button style="border:2px solid '+(on?'#1e293b':'#94a3b8')+';border-radius:999px;padding:7px 14px;font-size:13px;font-weight:900;cursor:pointer;background:'+(on?'#fef08a':'#fff')+';color:'+(on?'#0f172a':'#64748b')+'" onclick="var i=sTraits.indexOf(\''+t.name+'\');if(i>=0)sTraits.splice(i,1);else sTraits.push(\''+t.name+'\');sRender()">'+t.name+' <span style="color:'+(t.score>0?'#15803d':'#dc2626')+'">'+(t.score>0?'+':'')+t.score+'</span></button>';
-      });
-      html+='</div></div>';
+      html+='<div style="display:flex;flex-wrap:wrap;gap:7px" id="self-traits-wrap"></div></div>';
     }
-    html+='<button class="send-btn" onclick="sSubmit()">📤 採点を送信する</button>';
+    html+='<button class="send-btn" id="self-submit-btn">📤 採点を送信する</button>';
     html+='<div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">送信すると店長に結果が届きます</div>';
     html+='</div></div></div>';
     document.getElementById('self-app').innerHTML=html;
+    // 送信ボタン
+    var submitBtn=document.getElementById('self-submit-btn');
+    if(submitBtn)submitBtn.addEventListener('click',sSubmit);
+    // 評価項目selectのイベント設定
+    document.querySelectorAll('[data-item-id]').forEach(function(sel){
+      sel.addEventListener('change',function(){
+        sVals[this.getAttribute('data-item-id')]=Number(this.value);
+        sRender();
+      });
+    });
+    // 特殊能力ボタンを動的生成（onclick問題を回避）
+    var wrap=document.getElementById('self-traits-wrap');
+    if(wrap){
+      sD.traits.forEach(function(t){
+        var on=sTraits.indexOf(t.name)>=0;
+        var btn=document.createElement('button');
+        btn.style.cssText='border:2px solid '+(on?'#1e293b':'#94a3b8')+';border-radius:999px;padding:7px 14px;font-size:13px;font-weight:900;cursor:pointer;background:'+(on?'#fef08a':'#fff')+';color:'+(on?'#0f172a':'#64748b');
+        btn.innerHTML=t.name+' <span style="color:'+(t.score>0?'#15803d':'#dc2626')+'">'+(t.score>0?'+':'')+t.score+'</span>';
+        btn.addEventListener('click',function(){
+          var i=sTraits.indexOf(t.name);
+          if(i>=0)sTraits.splice(i,1);else sTraits.push(t.name);
+          sRender();
+        });
+        wrap.appendChild(btn);
+      });
+    }
   }
 
   sLoad();
