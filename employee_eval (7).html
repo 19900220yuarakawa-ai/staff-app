@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>社員評価アプリ（360度評価）</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Hiragino Kaku Gothic Pro','Meiryo',sans-serif;background:#FEF2F2;min-height:100vh;padding:10px}
+.card{background:#fff;border:2.5px solid #1e293b;border-radius:20px;overflow:hidden;margin-bottom:12px;box-shadow:0 4px 0 #1e293b}
+.card-header{background:linear-gradient(90deg,#fecaca,#fef08a);border-bottom:2.5px solid #1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.tabs{display:flex;gap:3px;padding:6px;background:#f8fafc;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;border:2px solid #cbd5e1;border-radius:12px;padding:8px 12px;font-weight:900;font-size:12px;cursor:pointer;background:#fff;color:#64748b;white-space:nowrap}
+.tab.active{background:#fde047;border-color:#1e293b;box-shadow:0 3px 0 #1e293b;color:#0f172a}
+.section-block{border:2px solid #1e293b;border-radius:14px;padding:12px;margin-bottom:8px}
+.item-row{background:#fff;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:6px}
+.item-label{font-size:13px;font-weight:700;line-height:1.4;margin-bottom:8px}
+.star-row{display:flex;gap:6px;align-items:center}
+.star{width:38px;height:38px;border:2px solid #1e293b;border-radius:10px;background:#fff;font-weight:900;font-size:14px;cursor:pointer;color:#94a3b8;font-family:inherit}
+.star.on{background:#fde047;color:#0f172a;box-shadow:0 2px 0 #1e293b}
+select,input,textarea{border:2px solid #1e293b;border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px;background:#fff;color:#0f172a;width:100%;font-family:inherit;-webkit-appearance:none}
+textarea{resize:vertical;min-height:60px}
+.btn{border:2px solid #1e293b;border-radius:12px;padding:10px 18px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;-webkit-appearance:none}
+.btn-primary{background:#fde047;color:#0f172a;box-shadow:0 3px 0 #1e293b}
+.btn-ghost{background:#fff;color:#0f172a}
+.btn-danger{background:#fff;color:#dc2626;border-color:#fca5a5}
+.btn-sm{padding:7px 12px;font-size:12px}
+.btn-xs{padding:4px 8px;font-size:11px;border-radius:8px}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 24px;border-radius:14px;font-weight:700;font-size:14px;z-index:999;opacity:0;transition:opacity .3s;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.link-box{background:linear-gradient(135deg,#fef3c7,#fecaca);border:2px solid #1e293b;border-radius:14px;padding:14px;margin-bottom:12px}
+.link-box .url{flex:1;background:#fff;border:1.5px solid #1e293b;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#0f172a;word-break:break-all}
+.gap-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1.5px solid #e2e8f0;font-size:12px}
+.gap-row:last-child{border-bottom:none}
+.gap-row .label{flex:1;font-weight:700;color:#0f172a}
+.gap-row .val{width:50px;text-align:right;font-weight:900;font-variant-numeric:tabular-nums}
+.ability-card{background:#fef3c7;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:6px;display:flex;gap:8px;align-items:flex-start}
+.comment-card{background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;padding:8px;margin-bottom:5px;font-size:12px;font-weight:700;color:#0f172a;line-height:1.5;border-left:4px solid #1e293b}
+.admin-row{display:flex;gap:8px;align-items:center;background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;padding:8px;margin-bottom:5px;flex-wrap:wrap}
+.admin-row input[type=text],.admin-row input:not([type]),.admin-row select{flex:1;padding:6px 10px;font-size:13px;min-width:140px}
+.section-card{border:2.5px solid #1e293b;border-radius:14px;overflow:hidden;margin-bottom:10px}
+.section-card-header{padding:8px 12px;display:flex;align-items:center;gap:6px;font-weight:900;font-size:13px;border-bottom:2px solid #1e293b;flex-wrap:wrap}
+.section-card-body{padding:10px;background:#fff}
+@media(min-width:700px){
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+}
+@media print {
+  body{background:#fff !important;padding:0}
+  .no-print{display:none !important}
+  .card{box-shadow:none;page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+<div id="app"><div style="text-align:center;padding:80px;font-weight:700;color:#64748b">読み込み中...</div></div>
+
+<script>
+const SUPABASE_URL='https://zssovpegksskkgrkzbds.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc292cGVna3Nza2tncmt6YmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMDQ0MDUsImV4cCI6MjA5MDY4MDQwNX0.lSjNnhYePMJELZYVkLoEMK-B_k4LHnCmZeKkJxSQpXc';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{storageKey:'emp-eval-auth-v2',autoRefreshToken:false,persistSession:false}});
+
+function showToast(msg,err){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.background=err?'#dc2626':'#0f172a';
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+let S={
+  mode:'admin',tab:'summary',loading:true,adminUnlocked:false,
+  staff:[],periods:[],
+  sections:[],items:[],
+  traitOptions:[],
+  qualifications:[],staffQualifications:[],
+  evals:[],scores:[],abilities:[],evalTraits:[],
+  targetStaffId:'',periodId:'',
+  radarView:'overlay', // 'overlay' | 'cards'
+  form:{targetStaffId:'',periodId:'',values:{},selTraits:[],good:'',improve:'',comment:''},
+  newAbility:{label:'',note:''},
+  newSection:{name:'',color:'#f8fafc'},
+  newItemSectionId:'',newItemLabel:'',newItemForPart:false,
+  newTrait:{name:'',score:2},
+  newStaff:{name:'',position:'',note:''},
+  newQualification:'',
+  qualTargetStaffId:'',
+  sent:false,
+};
+
+const params=new URLSearchParams(location.search);
+if(params.has('self'))S.mode='self';
+else if(params.has('staff'))S.mode='staff';
+else if(params.has('parttime'))S.mode='parttime';
+
+function requirePass(){
+  if(S.adminUnlocked)return true;
+  const p=prompt('🔒 管理パスワードを入力してください');
+  if(p==='2315'){S.adminUnlocked=true;return true;}
+  if(p!==null)showToast('パスワードが違います',true);
+  return false;
+}
+
+function partItems(){return S.items.filter(i=>i.for_parttime);}
+function itemsForMode(mode){return mode==='parttime'?partItems():S.items;}
+
+// =============================================================
+// レーダー用: スタッフの軸別スコア計算
+// =============================================================
+// 返り値: { axes: [{id,label,color,score}], totalAvg, traitScore, qualifications }
+function computeStaffRadar(staffId,periodId){
+  // 対象となる評価
+  const evals=S.evals.filter(e=>
+    e.target_staff_id===staffId &&
+    (!periodId||e.period_id===periodId)
+  );
+  const evalIds=evals.map(e=>e.id);
+  const scores=S.scores.filter(s=>evalIds.includes(s.evaluation_id));
+
+  // セクション軸(アクティブなセクション順)
+  const sortedSections=[...S.sections].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  const axes=sortedSections.map(sec=>{
+    const secItems=S.items.filter(i=>i.section_id===sec.id);
+    const secItemIds=new Set(secItems.map(i=>i.id));
+    const vals=[];
+    scores.forEach(s=>{
+      const key=s.item_id||s.item_key;
+      if(secItemIds.has(key)&&s.score>0)vals.push(s.score);
+    });
+    const avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+    return{id:sec.id,label:sec.name,color:sec.color||'#f8fafc',score:avg,count:vals.length};
+  });
+
+  // バイト評価軸(for_parttime=true の項目を、バイト評価タイプだけで集計)
+  const partItemIds=new Set(S.items.filter(i=>i.for_parttime).map(i=>i.id));
+  const partEvalIds=evals.filter(e=>e.evaluation_type==='parttime').map(e=>e.id);
+  const partScores=scores.filter(s=>partEvalIds.includes(s.evaluation_id)&&partItemIds.has(s.item_id||s.item_key)&&s.score>0);
+  const partAvg=partScores.length?partScores.map(s=>s.score).reduce((a,b)=>a+b,0)/partScores.length:0;
+  axes.push({id:'_parttime_axis',label:'バイト評価',color:'#dcfce7',score:partAvg,count:partScores.length});
+
+  // 総合平均 = 全評価の平均スコアの単純平均
+  const totals=evals.map(e=>Number(e.average_score||0)).filter(v=>v>0);
+  const totalAvg=totals.length?totals.reduce((a,b)=>a+b,0)/totals.length:0;
+
+  // 特殊能力補正合計
+  const traitRows=S.evalTraits.filter(t=>evalIds.includes(t.evaluation_id));
+  const traitScore=traitRows.reduce((s,t)=>s+Number(t.score||0),0);
+
+  // 保有資格
+  const quals=S.staffQualifications
+    .filter(sq=>sq.staff_id===staffId)
+    .map(sq=>S.qualifications.find(q=>q.id===sq.qualification_id))
+    .filter(Boolean);
+
+  return{axes,totalAvg,traitScore,qualifications:quals,evalCount:evals.length};
+}
+
+// SVGレーダーチャート描画
+// data: [{axes:[{score}...], color, label, thickness}]
+function renderRadarSvg(axisLabels,datasets,size){
+  size=size||260;
+  const cx=size/2, cy=size/2;
+  const radius=size*0.36;
+  const maxValue=5; // 5段階評価
+  const n=axisLabels.length;
+  if(n<3)return'<div style="padding:20px;color:#94a3b8;font-size:12px;text-align:center">軸が3つ未満のため描画できません</div>';
+
+  const angle=(i)=>-Math.PI/2+(Math.PI*2*i)/n;
+  const pt=(i,ratio)=>{
+    const a=angle(i);
+    return[cx+Math.cos(a)*radius*ratio, cy+Math.sin(a)*radius*ratio];
+  };
+
+  let svg=`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="max-width:100%;display:block">`;
+
+  // グリッド(5段階)
+  for(let lvl=1;lvl<=5;lvl++){
+    const pts=axisLabels.map((_,i)=>pt(i,lvl/5).join(',')).join(' ');
+    svg+=`<polygon points="${pts}" fill="${lvl===5?'rgba(255,255,255,0.5)':'none'}" stroke="#cbd5e1" stroke-width="${lvl===5?1.5:1}"/>`;
+  }
+  // 軸線
+  axisLabels.forEach((_,i)=>{
+    const[x,y]=pt(i,1);
+    svg+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#cbd5e1" stroke-width="1"/>`;
+  });
+
+  // データセット
+  datasets.forEach(ds=>{
+    const pts=ds.axes.map((a,i)=>{
+      const ratio=Math.max(0,Math.min(1,a.score/maxValue));
+      return pt(i,ratio).join(',');
+    }).join(' ');
+    svg+=`<polygon points="${pts}" fill="${ds.color}33" stroke="${ds.color}" stroke-width="${ds.thickness||2.5}" stroke-linejoin="round"/>`;
+    // 頂点ドット
+    ds.axes.forEach((a,i)=>{
+      const ratio=Math.max(0,Math.min(1,a.score/maxValue));
+      const[x,y]=pt(i,ratio);
+      svg+=`<circle cx="${x}" cy="${y}" r="3" fill="${ds.color}" stroke="#fff" stroke-width="1.5"/>`;
+    });
+  });
+
+  // ラベル
+  axisLabels.forEach((label,i)=>{
+    const[x,y]=pt(i,1.22);
+    let anchor='middle';
+    const a=angle(i);
+    const dx=Math.cos(a);
+    if(dx>0.3)anchor='start';
+    else if(dx<-0.3)anchor='end';
+    svg+=`<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10" font-weight="900" fill="#0f172a">${label}</text>`;
+  });
+
+  svg+='</svg>';
+  return svg;
+}
+
+// スタッフの色(10色ローテ)
+const STAFF_COLORS=['#dc2626','#2563eb','#15803d','#d97706','#7c3aed','#0891b2','#be185d','#65a30d','#c2410c','#4f46e5'];
+function staffColor(idx){return STAFF_COLORS[idx%STAFF_COLORS.length];}
+
+async function loadAll(){
+  S.loading=true;render();
+  try{
+    const[staff,pe,sec,it,tr,ql,sq]=await Promise.all([
+      sb.from('employee_eval_staff').select('*').eq('is_active',true).order('sort_order').order('name'),
+      sb.from('evaluation_periods').select('*').eq('is_open',true).order('start_date',{ascending:false}),
+      sb.from('employee_eval_sections').select('*').eq('is_active',true).order('sort_order'),
+      sb.from('employee_eval_items').select('*').eq('is_active',true).order('sort_order'),
+      sb.from('employee_trait_options').select('*').eq('is_active',true).order('sort_order'),
+      sb.from('employee_qualifications').select('*').eq('is_active',true).order('sort_order'),
+      sb.from('employee_staff_qualifications').select('*'),
+    ]);
+    if(staff.error&&staff.error.message){
+      showToast('setup_v4.sql を実行してください',true);
+    }
+    if((sec.error&&sec.error.message)||(it.error&&it.error.message)){
+      showToast('setup_v2.sql を実行してください',true);
+    }
+    if(tr.error&&tr.error.message){
+      showToast('setup_v3.sql を実行してください',true);
+    }
+    if((ql.error&&ql.error.message)||(sq.error&&sq.error.message)){
+      showToast('setup_v5.sql を実行してください',true);
+    }
+    S.staff=staff.data||[];
+    S.periods=pe.data||[];
+    S.sections=sec.data||[];S.items=it.data||[];
+    S.traitOptions=tr.data||[];
+    S.qualifications=ql.data||[];
+    S.staffQualifications=sq.data||[];
+
+    if(S.mode==='admin'){
+      const[ev,sc,ab,et]=await Promise.all([
+        sb.from('employee_evaluations').select('*').order('created_at',{ascending:false}),
+        sb.from('employee_evaluation_scores').select('*'),
+        sb.from('employee_special_abilities').select('*').order('created_at',{ascending:false}),
+        sb.from('employee_evaluation_traits').select('*'),
+      ]);
+      S.evals=ev.data||[];S.scores=sc.data||[];S.abilities=ab.data||[];
+      S.evalTraits=et.data||[];
+    }
+    if(S.mode!=='admin'){
+      const items=itemsForMode(S.mode);
+      const vals={};items.forEach(it=>vals[it.id]=0);
+      S.form.values=vals;
+      if(S.periods.length>=1&&!S.form.periodId)S.form.periodId=S.periods[0].id;
+    }
+  }catch(e){showToast('読込エラー: '+e.message,true);}
+  S.loading=false;render();
+}
+
+async function submitEval(){
+  const type=S.mode;
+  if(!S.form.targetStaffId){showToast('評価対象のスタッフを選んでください',true);return;}
+  if(!S.form.periodId){showToast('評価期間を選んでください',true);return;}
+  const vals=S.form.values;
+  const filled=Object.values(vals).filter(v=>v>0);
+  if(filled.length===0){showToast('少なくとも1項目は評価してください',true);return;}
+  if(filled.length!==Object.keys(vals).length&&!confirm('未回答の項目があります。このまま送信しますか?'))return;
+  try{
+    const avg=filled.reduce((a,b)=>a+b,0)/filled.length;
+    const total=Object.values(vals).reduce((a,b)=>a+Number(b||0),0);
+    const rank=avg>=4.5?'SS':avg>=4?'S':avg>=3.5?'A+':avg>=3?'A':avg>=2.5?'B':avg>=2?'C':'D';
+    const tScore=(S.form.selTraits||[]).reduce((s,name)=>{
+      const f=S.traitOptions.find(o=>o.name===name);
+      return s+(f?Number(f.score||0):0);
+    },0);
+    const row={
+      target_staff_id:S.form.targetStaffId,
+      period_id:S.form.periodId,
+      evaluation_type:type,
+      average_score:avg,total_score:total,trait_score:tScore,rank,
+      good_point:type==='self'?S.form.good:null,
+      improve_point:type==='self'?S.form.improve:null,
+      comment:type!=='self'?S.form.comment:null,
+    };
+    const ins=await sb.from('employee_evaluations').insert(row).select().single();
+    if(ins.error)throw ins.error;
+    const items=itemsForMode(type);
+    const scoreRows=items.map(it=>({
+      evaluation_id:ins.data.id,item_id:it.id,item_key:it.id,
+      item_label:it.label,score:Number(vals[it.id]||0),
+    }));
+    if(scoreRows.length){
+      const sc=await sb.from('employee_evaluation_scores').insert(scoreRows);
+      if(sc.error)throw sc.error;
+    }
+    if((S.form.selTraits||[]).length){
+      const traitRows=S.form.selTraits.map(name=>{
+        const f=S.traitOptions.find(o=>o.name===name);
+        return{evaluation_id:ins.data.id,trait_option_id:f?f.id:null,trait_name:name,score:Number(f?f.score:0)};
+      });
+      const tr=await sb.from('employee_evaluation_traits').insert(traitRows);
+      if(tr.error)throw tr.error;
+    }
+    S.sent=true;render();
+  }catch(e){showToast('送信エラー: '+e.message,true);}
+}
+
+// スタッフ管理(専用テーブル)
+async function addStaff(){
+  const name=S.newStaff.name.trim();
+  if(!name){showToast('名前を入力してください',true);return;}
+  const mx=Math.max(0,...S.staff.map(s=>s.sort_order||0));
+  try{
+    await sb.from('employee_eval_staff').insert({
+      name,
+      position:S.newStaff.position.trim()||null,
+      note:S.newStaff.note.trim()||null,
+      sort_order:mx+1,is_active:true,
+    });
+    S.newStaff={name:'',position:'',note:''};
+    showToast('追加しました');await loadAll();
+  }catch(e){showToast('追加エラー: '+e.message,true);}
+}
+async function updateStaff(id,field,value){
+  try{
+    await sb.from('employee_eval_staff').update({[field]:value}).eq('id',id);
+    await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+async function delStaff(id){
+  if(!confirm('このスタッフを削除しますか? 関連する評価データも削除されます'))return;
+  try{
+    await sb.from('employee_eval_staff').update({is_active:false}).eq('id',id);
+    showToast('削除しました');await loadAll();
+  }catch(e){showToast('削除エラー: '+e.message,true);}
+}
+async function moveStaff(id,direction){
+  const sorted=[...S.staff].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  const idx=sorted.findIndex(s=>s.id===id);
+  const swapIdx=idx+direction;
+  if(swapIdx<0||swapIdx>=sorted.length)return;
+  const a=sorted[idx],b=sorted[swapIdx];
+  try{
+    await sb.from('employee_eval_staff').update({sort_order:b.sort_order||0}).eq('id',a.id);
+    await sb.from('employee_eval_staff').update({sort_order:a.sort_order||0}).eq('id',b.id);
+    await loadAll();
+  }catch(e){showToast('移動エラー: '+e.message,true);}
+}
+async function addSection(){
+  const name=S.newSection.name.trim();
+  if(!name){showToast('セクション名を入力してください',true);return;}
+  const mx=Math.max(0,...S.sections.map(s=>s.sort_order||0));
+  try{
+    await sb.from('employee_eval_sections').insert({name,color:S.newSection.color,sort_order:mx+1,is_active:true});
+    S.newSection={name:'',color:'#f8fafc'};
+    showToast('追加しました');await loadAll();
+  }catch(e){showToast('追加エラー: '+e.message,true);}
+}
+async function updateSection(id,field,value){
+  try{await sb.from('employee_eval_sections').update({[field]:value}).eq('id',id);await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+async function deleteSection(id){
+  if(!confirm('このセクションと配下の項目をすべて削除しますか?'))return;
+  try{
+    await sb.from('employee_eval_sections').update({is_active:false}).eq('id',id);
+    await sb.from('employee_eval_items').update({is_active:false}).eq('section_id',id);
+    showToast('削除しました');await loadAll();
+  }catch(e){showToast('削除エラー: '+e.message,true);}
+}
+async function moveSection(id,direction){
+  const sorted=[...S.sections].sort((a,b)=>a.sort_order-b.sort_order);
+  const idx=sorted.findIndex(s=>s.id===id);
+  const swapIdx=idx+direction;
+  if(swapIdx<0||swapIdx>=sorted.length)return;
+  const a=sorted[idx],b=sorted[swapIdx];
+  try{
+    await sb.from('employee_eval_sections').update({sort_order:b.sort_order}).eq('id',a.id);
+    await sb.from('employee_eval_sections').update({sort_order:a.sort_order}).eq('id',b.id);
+    await loadAll();
+  }catch(e){showToast('移動エラー: '+e.message,true);}
+}
+async function addItem(){
+  if(!S.newItemSectionId){showToast('セクションを選択してください',true);return;}
+  const label=S.newItemLabel.trim();
+  if(!label){showToast('項目名を入力してください',true);return;}
+  const sameSection=S.items.filter(i=>i.section_id===S.newItemSectionId);
+  const mx=Math.max(0,...sameSection.map(i=>i.sort_order||0));
+  try{
+    await sb.from('employee_eval_items').insert({section_id:S.newItemSectionId,label,sort_order:mx+1,is_active:true,for_parttime:S.newItemForPart});
+    S.newItemLabel='';S.newItemForPart=false;
+    showToast('追加しました');await loadAll();
+  }catch(e){showToast('追加エラー: '+e.message,true);}
+}
+async function updateItem(id,field,value){
+  try{await sb.from('employee_eval_items').update({[field]:value}).eq('id',id);await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+async function deleteItem(id){
+  if(!confirm('この項目を削除しますか?'))return;
+  try{await sb.from('employee_eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();
+  }catch(e){showToast('削除エラー: '+e.message,true);}
+}
+async function moveItem(id,direction){
+  const it=S.items.find(x=>x.id===id);if(!it)return;
+  const sameSection=[...S.items.filter(x=>x.section_id===it.section_id)].sort((a,b)=>a.sort_order-b.sort_order);
+  const idx=sameSection.findIndex(x=>x.id===id);
+  const swapIdx=idx+direction;
+  if(swapIdx<0||swapIdx>=sameSection.length)return;
+  const a=sameSection[idx],b=sameSection[swapIdx];
+  try{
+    await sb.from('employee_eval_items').update({sort_order:b.sort_order}).eq('id',a.id);
+    await sb.from('employee_eval_items').update({sort_order:a.sort_order}).eq('id',b.id);
+    await loadAll();
+  }catch(e){showToast('移動エラー: '+e.message,true);}
+}
+async function addAbility(){
+  const l=S.newAbility.label.trim();
+  if(!l){showToast('能力名を入力してください',true);return;}
+  if(!S.targetStaffId||!S.periodId){showToast('対象スタッフと期間を選択してください',true);return;}
+  try{
+    await sb.from('employee_special_abilities').insert({target_staff_id:S.targetStaffId,period_id:S.periodId,label:l,note:S.newAbility.note.trim()||null});
+    S.newAbility={label:'',note:''};
+    showToast('追加しました');await loadAll();
+  }catch(e){showToast('追加エラー: '+e.message,true);}
+}
+async function delAbility(id){
+  if(!confirm('削除しますか?'))return;
+  await sb.from('employee_special_abilities').delete().eq('id',id);
+  showToast('削除しました');await loadAll();
+}
+async function delEval(id){
+  if(!confirm('この評価を削除しますか?'))return;
+  await sb.from('employee_evaluations').delete().eq('id',id);
+  showToast('削除しました');await loadAll();
+}
+
+// 特殊能力マスター管理
+async function addTraitOption(){
+  const name=S.newTrait.name.trim();
+  if(!name){showToast('能力名を入力してください',true);return;}
+  const mx=Math.max(0,...S.traitOptions.map(t=>t.sort_order||0));
+  try{
+    await sb.from('employee_trait_options').insert({
+      name,score:Number(S.newTrait.score||0),sort_order:mx+1,is_active:true,
+    });
+    S.newTrait={name:'',score:2};
+    showToast('追加しました');await loadAll();
+  }catch(e){showToast('追加エラー: '+e.message,true);}
+}
+async function updateTraitOption(id,field,value){
+  const patch=field==='score'?{score:Number(value)}:{[field]:value};
+  try{await sb.from('employee_trait_options').update(patch).eq('id',id);await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+async function delTraitOption(id){
+  if(!confirm('この特殊能力を削除しますか?'))return;
+  try{await sb.from('employee_trait_options').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();
+  }catch(e){showToast('削除エラー: '+e.message,true);}
+}
+
+// 資格マスター管理
+async function addQualification(){
+  const name=S.newQualification.trim();
+  if(!name){showToast('資格名を入力してください',true);return;}
+  const mx=Math.max(0,...S.qualifications.map(q=>q.sort_order||0));
+  try{
+    await sb.from('employee_qualifications').insert({name,sort_order:mx+1,is_active:true});
+    S.newQualification='';
+    showToast('追加しました');await loadAll();
+  }catch(e){showToast('追加エラー: '+e.message,true);}
+}
+async function updateQualification(id,name){
+  try{await sb.from('employee_qualifications').update({name}).eq('id',id);await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+async function delQualification(id){
+  if(!confirm('この資格を削除しますか? 紐付いているスタッフの資格情報も消えます'))return;
+  try{await sb.from('employee_qualifications').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();
+  }catch(e){showToast('削除エラー: '+e.message,true);}
+}
+// スタッフと資格の紐付け
+async function toggleStaffQualification(staffId,qualId){
+  const existing=S.staffQualifications.find(x=>x.staff_id===staffId&&x.qualification_id===qualId);
+  try{
+    if(existing){
+      await sb.from('employee_staff_qualifications').delete().eq('id',existing.id);
+    }else{
+      await sb.from('employee_staff_qualifications').insert({staff_id:staffId,qualification_id:qualId});
+    }
+    await loadAll();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+function copyUrl(param){
+  const url=location.origin+location.pathname+'?'+param;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>showToast(url));
+  }else{showToast(url);}
+}
+
+function render(){
+  if(S.loading){
+    document.getElementById('app').innerHTML='<div style="text-align:center;padding:80px;font-weight:700;color:#64748b">読み込み中...</div>';
+    return;
+  }
+  if(S.mode==='admin')renderAdmin();else renderEval();
+}
+
+// =============================================================
+// レーダーチャート: 全員重ね or 個別カード
+// =============================================================
+function renderRadarCards(){
+  // 軸ラベル決定(S.sectionsの並び + バイト評価軸)
+  const sortedSections=[...S.sections].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  const axisLabels=[...sortedSections.map(s=>s.name),'バイト評価'];
+
+  // 対象スタッフ一覧(フィルタがかかってれば1人、なければ全員)
+  const targetStaffList=S.targetStaffId
+    ? S.staff.filter(s=>s.id===S.targetStaffId)
+    : S.staff;
+
+  if(targetStaffList.length===0){
+    return '';
+  }
+
+  // 各スタッフのレーダーデータ
+  const staffData=targetStaffList.map((m,idx)=>{
+    const r=computeStaffRadar(m.id,S.periodId);
+    return{member:m,color:staffColor(idx),...r};
+  }).filter(d=>d.evalCount>0); // 評価がない人は除外
+
+  if(staffData.length===0){
+    return `<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">📡 レーダーチャート</div>
+      <div style="padding:24px;text-align:center;color:#94a3b8;font-size:13px;font-weight:700">
+        まだ評価データがありません
+      </div>
+    </div>`;
+  }
+
+  let html=`<div class="card">
+    <div style="border-bottom:2px solid #1e293b;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="font-size:14px;font-weight:900">📡 レーダーチャート（総合評価）</div>
+      <div class="no-print" style="display:flex;gap:4px">
+        <button class="btn btn-xs ${S.radarView==='overlay'?'btn-primary':'btn-ghost'}" onclick="S.radarView='overlay';render()">🔲 重ねて比較</button>
+        <button class="btn btn-xs ${S.radarView==='cards'?'btn-primary':'btn-ghost'}" onclick="S.radarView='cards';render()">🗂 個別カード</button>
+      </div>
+    </div>
+    <div style="padding:14px">`;
+
+  if(S.radarView==='overlay'){
+    // 全員重ねて表示
+    const datasets=staffData.map(d=>({axes:d.axes,color:d.color,label:d.member.name,thickness:2.5}));
+    html+=`<div style="display:flex;justify-content:center;margin-bottom:10px">
+      ${renderRadarSvg(axisLabels,datasets,320)}
+    </div>`;
+    // 凡例
+    html+=`<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:8px">
+      ${staffData.map(d=>`<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:900;border:1.5px solid ${d.color};border-radius:999px;padding:3px 10px;background:${d.color}15">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${d.color}"></span>
+        ${d.member.name}${d.member.position?'（'+d.member.position+'）':''}
+        <span style="color:#64748b;font-weight:700">${d.totalAvg.toFixed(1)}</span>
+      </div>`).join('')}
+    </div>`;
+  }else{
+    // 個別カード
+    html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">`;
+    staffData.forEach(d=>{
+      const badges=[];
+      // 選ばれた特殊能力(期間内の全評価ぶん、能力名でユニーク化)
+      const evalIds=S.evals.filter(e=>e.target_staff_id===d.member.id&&(!S.periodId||e.period_id===S.periodId)).map(e=>e.id);
+      const myTraits=S.evalTraits.filter(t=>evalIds.includes(t.evaluation_id));
+      const traitNames=[...new Set(myTraits.map(t=>t.trait_name).filter(Boolean))];
+      traitNames.forEach(name=>{
+        const t=myTraits.find(x=>x.trait_name===name);
+        badges.push({label:name,score:t?Number(t.score||0):0,type:'trait'});
+      });
+      // 資格
+      d.qualifications.forEach(q=>badges.push({label:q.name,type:'qual'}));
+
+      html+=`<div style="border:2px solid #1e293b;border-radius:14px;overflow:hidden;background:#fff">
+        <div style="background:${d.color}22;border-bottom:2px solid #1e293b;padding:8px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:15px;font-weight:900;color:#0f172a">${d.member.name}</div>
+              ${d.member.position?`<div style="font-size:10px;font-weight:700;color:#475569">${d.member.position}</div>`:''}
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:9px;font-weight:700;color:#475569">総合</div>
+              <div style="font-size:20px;font-weight:900;color:${d.color}">${d.totalAvg.toFixed(1)}</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:10px">
+          ${renderRadarSvg(axisLabels,[{axes:d.axes,color:d.color,thickness:2.5}],220)}
+          <div style="margin-top:8px;font-size:10px;color:#64748b;text-align:center;font-weight:700">${d.evalCount}件の評価 / 補正${d.traitScore>=0?'+':''}${d.traitScore}</div>
+          ${badges.length>0?`<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">
+            ${badges.map(b=>{
+              if(b.type==='qual'){
+                return`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:900;border:1.5px solid #7c3aed;background:#f3e8ff;color:#6b21a8;border-radius:6px;padding:2px 7px">🎖 ${b.label}</span>`;
+              }else{
+                const c=b.score>0?'#15803d':b.score<0?'#dc2626':'#475569';
+                return`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:900;border:1.5px solid ${c};background:${c}15;color:${c};border-radius:6px;padding:2px 7px">⭐ ${b.label} ${b.score>0?'+':''}${b.score}</span>`;
+              }
+            }).join('')}
+          </div>`:''}
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // 軸スコア一覧表
+  html+=`<div style="margin-top:14px;border:2px solid #1e293b;border-radius:10px;overflow:hidden">
+    <div style="background:#0f172a;color:#fef08a;padding:6px 10px;font-size:11px;font-weight:900">軸別スコア（5点満点）</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;font-weight:700">
+        <thead>
+          <tr style="background:#fef3c7">
+            <th style="padding:6px 8px;text-align:left;border-bottom:1.5px solid #1e293b">スタッフ</th>
+            ${axisLabels.map(l=>`<th style="padding:6px 8px;text-align:center;border-bottom:1.5px solid #1e293b;font-size:10px">${l}</th>`).join('')}
+            <th style="padding:6px 8px;text-align:center;border-bottom:1.5px solid #1e293b;background:#fde047">総合</th>
+          </tr>
+        </thead>
+        <tbody>`;
+  staffData.forEach(d=>{
+    html+=`<tr style="border-bottom:1px solid #e2e8f0">
+      <td style="padding:5px 8px;font-weight:900"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${d.color};margin-right:6px"></span>${d.member.name}</td>
+      ${d.axes.map(a=>`<td style="padding:5px 8px;text-align:center;font-variant-numeric:tabular-nums">${a.count>0?a.score.toFixed(2):'—'}</td>`).join('')}
+      <td style="padding:5px 8px;text-align:center;font-weight:900;background:#fef9c3">${d.totalAvg.toFixed(2)}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+
+  html+=`</div></div>`;
+  return html;
+}
+
+function renderEval(){
+  if(S.sent){
+    document.getElementById('app').innerHTML=`
+      <div class="card" style="max-width:480px;margin:40px auto">
+        <div style="padding:40px 20px;text-align:center">
+          <div style="font-size:60px;margin-bottom:10px">🎉</div>
+          <div style="font-size:20px;font-weight:900;margin-bottom:8px">送信完了しました！</div>
+          <div style="font-size:14px;color:#64748b;font-weight:700">ご協力ありがとうございました</div>
+          <button class="btn btn-ghost" style="margin-top:20px" onclick="location.reload()">もう一件入力する</button>
+        </div>
+      </div>`;
+    return;
+  }
+  const type=S.mode;
+  const titleMap={self:'🧑 自己評価',staff:'👥 社員からの評価（匿名）',parttime:'🎓 アルバイトからの評価（匿名）'};
+  const bgMap={self:'#dbeafe',staff:'#fce7f3',parttime:'#dcfce7'};
+  const items=itemsForMode(type);
+  const filled=items.map(i=>S.form.values[i.id]||0).filter(v=>v>0);
+  const avg=filled.length?filled.reduce((a,b)=>a+b,0)/filled.length:0;
+  const tScore=(S.form.selTraits||[]).reduce((s,name)=>{
+    const f=S.traitOptions.find(o=>o.name===name);
+    return s+(f?Number(f.score||0):0);
+  },0);
+  const totalScore=avg+tScore;
+
+  const sortedSections=[...S.sections].sort((a,b)=>a.sort_order-b.sort_order);
+  const itemsBySec=[];
+  sortedSections.forEach(s=>{
+    const secItems=items.filter(i=>i.section_id===s.id).sort((a,b)=>a.sort_order-b.sort_order);
+    if(secItems.length)itemsBySec.push({section:s,items:secItems});
+  });
+
+  let html=`<div style="max-width:520px;margin:0 auto">
+    <div class="card">
+      <div class="card-header" style="background:${bgMap[type]}">
+        <div>
+          <div style="font-size:20px;font-weight:900;color:#0f172a">${titleMap[type]}</div>
+          <div style="font-size:11px;font-weight:700;color:#475569">1〜5 の5段階評価 / 全${items.length}項目</div>
+        </div>
+      </div>
+      <div style="padding:14px">
+        <div style="margin-bottom:10px">
+          <div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">評価対象のスタッフ</div>
+          <select onchange="S.form.targetStaffId=this.value;render()">
+            <option value="">選択してください</option>
+            ${S.staff.map(m=>{
+              const label=m.position?`${m.name}（${m.position}）`:m.name;
+              return`<option value="${m.id}" ${S.form.targetStaffId===m.id?'selected':''}>${label}</option>`;
+            }).join('')}
+          </select>
+          ${S.staff.length===0?`<div style="background:#fee2e2;border:1.5px solid #dc2626;border-radius:8px;padding:8px;font-size:11px;font-weight:700;color:#991b1b;margin-top:6px">⚠️ 評価対象のスタッフが登録されていません。管理者にご連絡ください。</div>`:''}
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">評価期間</div>
+          <select onchange="S.form.periodId=this.value;render()">
+            <option value="">選択してください</option>
+            ${S.periods.map(p=>`<option value="${p.id}" ${S.form.periodId===p.id?'selected':''}>${p.label}</option>`).join('')}
+          </select>
+        </div>
+        <div style="border:2.5px solid #1e293b;border-radius:14px;padding:12px;margin-bottom:12px;background:#fef3c7">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center">
+            <div style="text-align:center">
+              <div style="font-size:10px;font-weight:900;color:#475569">平均スコア</div>
+              <div style="font-size:24px;font-weight:900;color:#0f172a">${avg.toFixed(1)}</div>
+              <div style="font-size:9px;color:#64748b">/ 5.0</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:10px;font-weight:900;color:#475569">特殊能力</div>
+              <div style="font-size:24px;font-weight:900;color:${tScore>0?'#15803d':tScore<0?'#dc2626':'#475569'}">${tScore>=0?'+':''}${tScore}</div>
+              <div style="font-size:9px;color:#64748b">補正点</div>
+            </div>
+            <div style="text-align:center;border-left:2px solid #1e293b;padding-left:8px">
+              <div style="font-size:10px;font-weight:900;color:#475569">合計</div>
+              <div style="font-size:28px;font-weight:900;color:#0f172a">${totalScore.toFixed(1)}</div>
+              <div style="font-size:9px;color:#64748b">回答 ${filled.length}/${items.length}</div>
+            </div>
+          </div>
+        </div>`;
+
+  itemsBySec.forEach(({section,items})=>{
+    html+=`<div class="section-block" style="background:${section.color||'#f8fafc'}">
+      <div style="font-size:14px;font-weight:900;margin-bottom:8px">${section.name}</div>`;
+    items.forEach(it=>{
+      const v=S.form.values[it.id]||0;
+      html+=`<div class="item-row">
+        <div class="item-label">${it.label}</div>
+        <div class="star-row">
+          ${[1,2,3,4,5].map(n=>`<button type="button" class="star ${v>=n?'on':''}" onclick="S.form.values['${it.id}']=${n};render()">${n}</button>`).join('')}
+          <span style="margin-left:6px;font-size:11px;font-weight:900;color:#475569">${v>0?v+'/5':'未選択'}</span>
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+
+  if(type==='self'){
+    html+=`<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">自分の強み・良い点（任意）</div><textarea onchange="S.form.good=this.value">${S.form.good||''}</textarea></div>
+    <div style="margin-bottom:14px"><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">改善したい点・次の目標（任意）</div><textarea onchange="S.form.improve=this.value">${S.form.improve||''}</textarea></div>`;
+  }else{
+    html+=`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:4px">コメント（任意・匿名）</div><textarea placeholder="良い点・改善点など" onchange="S.form.comment=this.value">${S.form.comment||''}</textarea></div>`;
+  }
+
+  // 特殊能力補正
+  if(S.traitOptions.length>0){
+    html+=`<div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:900;margin-bottom:4px">⭐ 特殊能力補正</div>
+      <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:8px">あてはまるものをタップしてください（複数選択可）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    S.traitOptions.forEach(t=>{
+      const on=(S.form.selTraits||[]).includes(t.name);
+      html+=`<button type="button" onclick="var i=(S.form.selTraits||[]).indexOf('${t.name.replace(/'/g,"\\'")}');if(i>=0)S.form.selTraits.splice(i,1);else{if(!S.form.selTraits)S.form.selTraits=[];S.form.selTraits.push('${t.name.replace(/'/g,"\\'")}');}render()" style="border:2px solid ${on?'#1e293b':'#94a3b8'};border-radius:999px;padding:7px 14px;font-size:13px;font-weight:900;cursor:pointer;background:${on?'#fef08a':'#fff'};color:${on?'#0f172a':'#64748b'};font-family:inherit">
+        ${t.name} <span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span>
+      </button>`;
+    });
+    html+=`</div></div>`;
+  }
+  html+=`<button class="btn btn-primary" style="width:100%;padding:16px;font-size:16px;box-shadow:0 4px 0 #1e293b" onclick="submitEval()">📤 評価を送信する</button>
+        <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">${type==='self'?'送信すると自己評価として記録されます':'匿名で送信されます'}</div>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('app').innerHTML=html;
+}
+
+function renderAdmin(){
+  const origin=location.origin+location.pathname;
+  const targetStaff=S.staff.find(m=>m.id===S.targetStaffId);
+  const targetPeriod=S.periods.find(p=>p.id===S.periodId);
+  const filteredEvals=S.evals.filter(e=>(!S.targetStaffId||e.target_staff_id===S.targetStaffId)&&(!S.periodId||e.period_id===S.periodId));
+  const evalIds=filteredEvals.map(e=>e.id);
+  const filteredScores=S.scores.filter(s=>evalIds.includes(s.evaluation_id));
+  const filteredAbilities=S.abilities.filter(a=>(!S.targetStaffId||a.target_staff_id===S.targetStaffId)&&(!S.periodId||a.period_id===S.periodId));
+  const byType={self:[],staff:[],parttime:[]};
+  filteredEvals.forEach(e=>{if(byType[e.evaluation_type])byType[e.evaluation_type].push(e);});
+
+  const scoreForItem=(evals,itemId)=>{
+    const scores=[];
+    evals.forEach(e=>{
+      const row=filteredScores.find(x=>x.evaluation_id===e.id&&(x.item_id===itemId||x.item_key===itemId));
+      if(row&&row.score>0)scores.push(row.score);
+    });
+    return scores;
+  };
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:null;
+  const sortedSections=[...S.sections].sort((a,b)=>a.sort_order-b.sort_order);
+
+  let html=`
+  <div class="card no-print">
+    <div class="card-header">
+      <div>
+        <div style="font-size:17px;font-weight:900;color:#0f172a">🎌 社員評価アプリ</div>
+        <div style="font-size:10px;font-weight:700;color:#475569">360度評価 · 管理画面</div>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="loadAll()">🔄</button>
+        <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab ${S.tab==='summary'?'active':''}" onclick="S.tab='summary';render()">📊 集計</button>
+      <button class="tab ${S.tab==='abilities'?'active':''}" onclick="S.tab='abilities';render()">✨ 特殊能力</button>
+      <button class="tab ${S.tab==='comments'?'active':''}" onclick="S.tab='comments';render()">💬 コメント</button>
+      <button class="tab ${S.tab==='guide'?'active':''}" onclick="S.tab='guide';render()">🔗 URL案内</button>
+      <button class="tab ${S.tab==='staff'?'active':''}" onclick="S.tab='staff';render()">👥 対象スタッフ</button>
+      <button class="tab ${S.tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
+      <button class="tab ${S.tab==='traits'?'active':''}" onclick="S.tab='traits';render()">⭐ 能力マスター</button>
+      <button class="tab ${S.tab==='quals'?'active':''}" onclick="S.tab='quals';render()">🎖 資格マスター</button>
+    </div>
+  </div>`;
+
+  if(['summary','abilities','comments'].includes(S.tab)){
+    html+=`<div class="card no-print"><div style="padding:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:4px">対象スタッフ</div>
+          <select onchange="S.targetStaffId=this.value;render()">
+            <option value="">— 全員 —</option>
+            ${S.staff.map(m=>{
+              const label=m.position?`${m.name}（${m.position}）`:m.name;
+              return`<option value="${m.id}" ${S.targetStaffId===m.id?'selected':''}>${label}</option>`;
+            }).join('')}
+          </select>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:4px">期間</div>
+          <select onchange="S.periodId=this.value;render()">
+            <option value="">— 全期間 —</option>
+            ${S.periods.map(p=>`<option value="${p.id}" ${S.periodId===p.id?'selected':''}>${p.label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div></div>`;
+  }
+
+  if(S.tab==='summary'){
+    // 特殊能力の集計
+    const allEvalIds=filteredEvals.map(e=>e.id);
+    const filteredTraits=S.evalTraits.filter(t=>allEvalIds.includes(t.evaluation_id));
+    // タイプ別の平均スコア・補正・合計
+    const typeStats=(evals)=>{
+      if(!evals.length)return{avg:null,trait:0,total:null,count:0};
+      const avgs=evals.map(e=>Number(e.average_score||0)).filter(v=>v>0);
+      const avg=avgs.length?avgs.reduce((a,b)=>a+b,0)/avgs.length:null;
+      const traitSum=evals.reduce((s,e)=>{
+        const evTraits=filteredTraits.filter(t=>t.evaluation_id===e.id);
+        return s+evTraits.reduce((ss,t)=>ss+Number(t.score||0),0);
+      },0);
+      const traitAvg=evals.length?traitSum/evals.length:0;
+      return{avg,trait:traitAvg,total:avg!==null?avg+traitAvg:null,count:evals.length};
+    };
+    const allStats={self:typeStats(byType.self),staff:typeStats(byType.staff),parttime:typeStats(byType.parttime)};
+
+    html+=`<div class="card">
+      <div class="card-header" style="background:linear-gradient(90deg,#fef08a,#bfdbfe)">
+        <div>
+          <div style="font-size:16px;font-weight:900;color:#0f172a">${targetStaff?targetStaff.name:'全スタッフ'} / 評価レポート</div>
+          <div style="font-size:11px;font-weight:700;color:#475569">${targetPeriod?targetPeriod.label:'全期間'}</div>
+        </div>
+      </div>
+      <div style="padding:12px">
+
+        <!-- タイプ別スコアサマリー -->
+        <div style="margin-bottom:12px">
+          ${[
+            {key:'self',label:'🧑 自己評価',bg:'#dbeafe',color:'#1d4ed8'},
+            {key:'staff',label:'👥 社員（匿名）',bg:'#fce7f3',color:'#be185d'},
+            {key:'parttime',label:'🎓 バイト（匿名）',bg:'#dcfce7',color:'#15803d'},
+          ].map(t=>{
+            const s=allStats[t.key];
+            return`<div style="background:${t.bg};border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:6px">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div>
+                  <div style="font-size:11px;font-weight:900;color:${t.color}">${t.label}</div>
+                  <div style="font-size:10px;color:#64748b">${s.count}件</div>
+                </div>
+                <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+                  <div style="text-align:center">
+                    <div style="font-size:9px;font-weight:700;color:#475569">平均</div>
+                    <div style="font-size:18px;font-weight:900">${s.avg!==null?s.avg.toFixed(2):'—'}</div>
+                  </div>
+                  <div style="text-align:center">
+                    <div style="font-size:9px;font-weight:700;color:#475569">補正</div>
+                    <div style="font-size:18px;font-weight:900;color:${s.trait>0?'#15803d':s.trait<0?'#dc2626':'#475569'}">${s.trait>=0?'+':''}${s.trait.toFixed(1)}</div>
+                  </div>
+                  <div style="text-align:center;border-left:2px solid #1e293b;padding-left:10px">
+                    <div style="font-size:9px;font-weight:700;color:#475569">合計</div>
+                    <div style="font-size:22px;font-weight:900;color:#0f172a">${s.total!==null?s.total.toFixed(2):'—'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div style="border:2px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:10px">
+          <div style="background:#0f172a;color:#fef08a;padding:8px 10px;font-size:11px;font-weight:900">項目別スコア / 自己vs社員ギャップ</div>
+          <div>
+            <div class="gap-row" style="background:#fef3c7;font-size:10px;font-weight:900;color:#475569">
+              <span class="label">項目</span>
+              <span class="val" style="color:#1d4ed8">自己</span>
+              <span class="val" style="color:#be185d">社員</span>
+              <span class="val" style="color:#15803d">バイト</span>
+              <span class="val">差</span>
+            </div>
+            ${sortedSections.map(sec=>{
+              const secItems=S.items.filter(i=>i.section_id===sec.id).sort((a,b)=>a.sort_order-b.sort_order);
+              if(secItems.length===0)return'';
+              return `<div style="background:${sec.color||'#f8fafc'};padding:4px 10px;font-size:10px;font-weight:900;color:#0f172a;border-top:1.5px solid #1e293b;border-bottom:1px solid #e2e8f0">${sec.name}</div>`+
+                secItems.map(it=>{
+                  const selfA=avg(scoreForItem(byType.self,it.id));
+                  const staffA=avg(scoreForItem(byType.staff,it.id));
+                  const ptA=it.for_parttime?avg(scoreForItem(byType.parttime,it.id)):null;
+                  const fmt=v=>v===null?'—':v.toFixed(2);
+                  const gap=selfA!==null&&staffA!==null?selfA-staffA:null;
+                  const gapColor=gap===null?'#94a3b8':gap>0.5?'#dc2626':gap<-0.5?'#15803d':'#475569';
+                  const ptCell=it.for_parttime
+                    ?`<span class="val" style="color:#15803d">${fmt(ptA)}</span>`
+                    :`<span class="val" style="color:#cbd5e1;background:#f1f5f9;font-size:10px;font-weight:700">対象外</span>`;
+                  return `<div class="gap-row">
+                    <span class="label" style="font-size:11px">${it.label}</span>
+                    <span class="val" style="color:#1d4ed8">${fmt(selfA)}</span>
+                    <span class="val" style="color:#be185d">${fmt(staffA)}</span>
+                    ${ptCell}
+                    <span class="val" style="color:${gapColor};font-size:12px">${gap!==null?(gap>0?'+':'')+gap.toFixed(1):'—'}</span>
+                  </div>`;
+                }).join('');
+            }).join('')}
+          </div>
+        </div>
+
+        ${filteredTraits.length>0?`<div style="border:2px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:10px">
+          <div style="background:#0f172a;color:#fef08a;padding:8px 10px;font-size:11px;font-weight:900">⭐ 選ばれた特殊能力</div>
+          <div style="padding:10px;display:flex;flex-wrap:wrap;gap:6px">
+            ${(()=>{
+              // 評価者種別ごとに集計
+              const traitCount={};
+              filteredTraits.forEach(t=>{
+                const ev=S.evals.find(e=>e.id===t.evaluation_id);
+                const type=ev?.evaluation_type||'?';
+                const key=t.trait_name+'|'+t.score;
+                if(!traitCount[key])traitCount[key]={name:t.trait_name,score:Number(t.score||0),counts:{self:0,staff:0,parttime:0}};
+                traitCount[key].counts[type]=(traitCount[key].counts[type]||0)+1;
+              });
+              return Object.values(traitCount).map(t=>{
+                const totalCount=t.counts.self+t.counts.staff+t.counts.parttime;
+                return`<div style="display:inline-flex;align-items:center;gap:5px;border:2px solid #1e293b;border-radius:999px;padding:4px 10px;background:${t.score>0?'#fef9c3':'#fee2e2'};font-size:11px;font-weight:900">
+                  <span>${t.name}</span>
+                  <span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span>
+                  <span style="background:#1e293b;color:#fff;border-radius:999px;padding:1px 6px;font-size:9px">×${totalCount}</span>
+                </div>`;
+              }).join('');
+            })()}
+          </div>
+        </div>`:''}
+
+        <!-- セクション別レーダーチャート(全員) -->
+        ${renderRadarSection(sortedSections)}
+
+        <div style="background:#fef3c7;border:1.5px solid #1e293b;border-radius:10px;padding:8px;font-size:11px;font-weight:700;color:#475569">
+          <div style="margin-bottom:2px"><span style="color:#dc2626;font-weight:900">差 +0.5以上</span> = 自己評価が社員評価より高い</div>
+          <div><span style="color:#15803d;font-weight:900">差 −0.5以下</span> = 社員評価の方が高い</div>
+        </div>
+      </div>
+    </div>`;
+
+    // レーダーチャート
+    html+=renderRadarCards();
+
+    if(filteredEvals.length>0){
+      html+=`<div class="card no-print">
+        <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:13px;font-weight:900">登録された評価一覧</div>
+        <div style="padding:10px">
+          ${filteredEvals.map(e=>{
+            const m=S.staff.find(x=>x.id===e.target_staff_id);
+            const p=S.periods.find(x=>x.id===e.period_id);
+            const typeLabel={self:'🧑 自己',staff:'👥 社員',parttime:'🎓 バイト'}[e.evaluation_type]||e.evaluation_type;
+            return`<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px;flex-wrap:wrap">
+              <span style="font-weight:900;flex:1;min-width:120px">${m?m.name:'?'} · ${typeLabel}</span>
+              <span style="color:#64748b">平均 ${(e.average_score||0).toFixed(1)}</span>
+              <span style="color:#64748b;font-size:11px">${p?p.label:''}</span>
+              <button class="btn btn-danger btn-sm" onclick="delEval('${e.id}')">削除</button>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+  }
+
+  if(S.tab==='abilities'){
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">✨ 特殊能力・特記事項</div>
+      <div style="padding:12px">
+        ${filteredAbilities.length===0?'<div style="color:#94a3b8;font-size:13px;font-weight:700;padding:10px 0">まだ登録されていません</div>':''}
+        ${filteredAbilities.map(a=>{
+          const m=S.staff.find(x=>x.id===a.target_staff_id);
+          const p=S.periods.find(x=>x.id===a.period_id);
+          return`<div class="ability-card">
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:900;color:#0f172a">${a.label}</div>
+              ${a.note?`<div style="font-size:12px;font-weight:700;color:#475569;margin-top:4px">${a.note}</div>`:''}
+              <div style="font-size:10px;color:#94a3b8;margin-top:4px">${m?m.name:''} ${p?'· '+p.label:''}</div>
+            </div>
+            <button class="btn btn-danger btn-sm no-print" onclick="delAbility('${a.id}')">削除</button>
+          </div>`;
+        }).join('')}
+        <div class="no-print" style="margin-top:14px;border-top:2px solid #e2e8f0;padding-top:12px">
+          <div style="font-size:12px;font-weight:900;color:#64748b;margin-bottom:6px">新しい能力を追加</div>
+          ${!S.targetStaffId||!S.periodId?'<div style="background:#fee2e2;border:1.5px solid #dc2626;border-radius:8px;padding:8px;font-size:11px;font-weight:700;color:#991b1b;margin-bottom:8px">⚠️ 対象スタッフと期間を選択してください</div>':''}
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <input placeholder="能力名 (例: 出汁の目利き)" value="${S.newAbility.label||''}" oninput="S.newAbility.label=this.value">
+            <input placeholder="メモ (任意)" value="${S.newAbility.note||''}" oninput="S.newAbility.note=this.value">
+            <button class="btn btn-primary" onclick="addAbility()">＋ 追加</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(S.tab==='comments'){
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">💬 寄せられたコメント</div>
+      <div style="padding:12px">
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;font-weight:900;color:#1d4ed8;margin-bottom:6px">🧑 自己評価より</div>
+          ${byType.self.filter(e=>e.good_point||e.improve_point).length===0?'<div style="color:#94a3b8;font-size:12px;font-weight:700">コメントなし</div>':''}
+          ${byType.self.map(e=>{
+            const m=S.staff.find(x=>x.id===e.target_staff_id);
+            return(e.good_point?`<div class="comment-card"><span style="font-size:10px;color:#15803d;font-weight:900">[強み]</span> ${e.good_point}<div style="font-size:10px;color:#94a3b8;margin-top:3px">${m?m.name:''}</div></div>`:'')+
+                  (e.improve_point?`<div class="comment-card"><span style="font-size:10px;color:#ea580c;font-weight:900">[改善]</span> ${e.improve_point}<div style="font-size:10px;color:#94a3b8;margin-top:3px">${m?m.name:''}</div></div>`:'');
+          }).join('')}
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;font-weight:900;color:#be185d;margin-bottom:6px">👥 社員より</div>
+          ${byType.staff.filter(e=>e.comment).length===0?'<div style="color:#94a3b8;font-size:12px;font-weight:700">コメントなし</div>':''}
+          ${byType.staff.filter(e=>e.comment).map(e=>{
+            const m=S.staff.find(x=>x.id===e.target_staff_id);
+            return`<div class="comment-card">${e.comment}<div style="font-size:10px;color:#94a3b8;margin-top:3px">→ ${m?m.name:''}</div></div>`;
+          }).join('')}
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:900;color:#15803d;margin-bottom:6px">🎓 アルバイトより</div>
+          ${byType.parttime.filter(e=>e.comment).length===0?'<div style="color:#94a3b8;font-size:12px;font-weight:700">コメントなし</div>':''}
+          ${byType.parttime.filter(e=>e.comment).map(e=>{
+            const m=S.staff.find(x=>x.id===e.target_staff_id);
+            return`<div class="comment-card">${e.comment}<div style="font-size:10px;color:#94a3b8;margin-top:3px">→ ${m?m.name:''}</div></div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(S.tab==='guide'){
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">🔗 回答用URLの案内</div>
+      <div style="padding:12px">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:14px">下記の3つのURLを配布してください。回答画面で評価対象のスタッフを選んでもらいます</div>
+        ${[
+          {param:'self',title:'🧑 本人用（自己評価）',color:'#1d4ed8',bg:'linear-gradient(135deg,#fef3c7,#fecaca)'},
+          {param:'staff',title:'👥 社員用（匿名評価）',color:'#be185d',bg:'linear-gradient(135deg,#fce7f3,#fbcfe8)'},
+          {param:'parttime',title:'🎓 アルバイト用（匿名評価）',color:'#15803d',bg:'linear-gradient(135deg,#dcfce7,#bbf7d0)'},
+        ].map(l=>`<div class="link-box" style="background:${l.bg}">
+          <div style="font-size:13px;font-weight:900;color:${l.color};margin-bottom:6px">${l.title}</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div class="url">${origin}?${l.param}</div>
+            <button class="btn btn-primary btn-sm" onclick="copyUrl('${l.param}')">📋 コピー</button>
+          </div>
+        </div>`).join('')}
+        <div style="background:#fef9c3;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-top:14px">
+          <div style="font-size:11px;font-weight:700;color:#475569;line-height:1.6">
+            💡 <strong>使い方</strong><br>
+            ① 「👥 対象スタッフ」タブで評価する人を登録(名前・役職・メモ)<br>
+            ② 「📝 評価項目」タブで項目を調整(必要なら)<br>
+            ③ 「⭐ 能力マスター」タブで特殊能力を設定(必要なら)<br>
+            ④ 前回アプリの「基本設定」タブで評価期間を作成<br>
+            ⑤ 上記URLを配布 → 回答者が対象スタッフと期間を選んで回答<br>
+            ⑥ 「📊 集計」で結果を確認
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(S.tab==='staff'){
+    const sortedStaff=[...S.staff].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">👥 評価対象スタッフの登録</div>
+      <div style="padding:12px">
+        <div style="background:#e0f2fe;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#0f172a;line-height:1.6">
+          💡 このアプリで評価する対象者を登録します。名前・役職・メモが編集できます。<br>
+          ここに登録された人が、回答画面の「評価対象」選択肢に表示されます。
+        </div>
+        <div style="margin-bottom:10px;font-size:12px;font-weight:900;color:#475569">現在 ${S.staff.length}人 を登録中</div>`;
+
+    if(sortedStaff.length===0){
+      html+=`<div style="color:#94a3b8;padding:20px;text-align:center;font-size:13px;font-weight:700">スタッフが登録されていません。下のフォームから追加してください。</div>`;
+    }else{
+      sortedStaff.forEach((m,idx)=>{
+        html+=`<div style="border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:8px;background:#fff">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+            <button class="btn btn-xs btn-ghost" onclick="moveStaff('${m.id}',-1)" ${idx===0?'disabled style="opacity:.3"':''}>↑</button>
+            <button class="btn btn-xs btn-ghost" onclick="moveStaff('${m.id}',1)" ${idx===sortedStaff.length-1?'disabled style="opacity:.3"':''}>↓</button>
+            <input type="text" value="${(m.name||'').replace(/"/g,'&quot;')}" onblur="updateStaff('${m.id}','name',this.value)" placeholder="名前" style="flex:1;min-width:120px;padding:6px 10px;font-size:14px;font-weight:900">
+            <input type="text" value="${(m.position||'').replace(/"/g,'&quot;')}" onblur="updateStaff('${m.id}','position',this.value)" placeholder="役職(店長など)" style="width:140px;flex:none;padding:6px 10px;font-size:12px">
+            <button class="btn btn-xs btn-danger" onclick="delStaff('${m.id}')">削除</button>
+          </div>
+          <input type="text" value="${(m.note||'').replace(/"/g,'&quot;')}" onblur="updateStaff('${m.id}','note',this.value)" placeholder="メモ (入社年・部署など / 任意)" style="width:100%;padding:6px 10px;font-size:12px;color:#475569">
+        </div>`;
+      });
+    }
+
+    html+=`<div style="background:#fef3c7;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-top:12px">
+          <div style="font-size:12px;font-weight:900;margin-bottom:8px">＋ 新しいスタッフを追加</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <input type="text" placeholder="名前 (必須)" value="${S.newStaff.name}" oninput="S.newStaff.name=this.value">
+            <input type="text" placeholder="役職 (例: 店長 / 社員 / 料理長)" value="${S.newStaff.position}" oninput="S.newStaff.position=this.value">
+            <input type="text" placeholder="メモ (入社年・部署など / 任意)" value="${S.newStaff.note}" oninput="S.newStaff.note=this.value">
+            <button class="btn btn-primary" onclick="addStaff()">＋ スタッフを追加</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(S.tab==='items'){
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">📝 評価項目の管理</div>
+      <div style="padding:12px">
+        <div style="background:#e0f2fe;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#0f172a;line-height:1.6">
+          💡 セクションと項目の追加・編集・並び替えができます。「バイト」にチェックを入れた項目だけがアルバイトの評価画面に表示されます。
+        </div>
+        <div style="background:#fef3c7;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:900;margin-bottom:6px">＋ 新しいセクションを追加</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <input placeholder="セクション名 (例: 接客)" value="${S.newSection.name}" oninput="S.newSection.name=this.value" style="flex:1;min-width:140px">
+            <input type="color" value="${S.newSection.color}" oninput="S.newSection.color=this.value" style="width:44px;height:38px;padding:2px;border-radius:8px;flex:none">
+            <button class="btn btn-primary btn-sm" onclick="addSection()">追加</button>
+          </div>
+        </div>`;
+    if(sortedSections.length===0){
+      html+=`<div style="color:#94a3b8;padding:20px;text-align:center">セクションがありません</div>`;
+    }
+    sortedSections.forEach((sec,secIdx)=>{
+      const secItems=S.items.filter(i=>i.section_id===sec.id).sort((a,b)=>a.sort_order-b.sort_order);
+      html+=`<div class="section-card">
+        <div class="section-card-header" style="background:${sec.color||'#f8fafc'}">
+          <button class="btn btn-xs btn-ghost" onclick="moveSection('${sec.id}',-1)" ${secIdx===0?'disabled style="opacity:.3"':''}>↑</button>
+          <button class="btn btn-xs btn-ghost" onclick="moveSection('${sec.id}',1)" ${secIdx===sortedSections.length-1?'disabled style="opacity:.3"':''}>↓</button>
+          <input type="text" value="${(sec.name||'').replace(/"/g,'&quot;')}" onblur="updateSection('${sec.id}','name',this.value)" style="flex:1;font-weight:900;font-size:13px;padding:4px 8px;min-width:120px">
+          <input type="color" value="${sec.color||'#f8fafc'}" onchange="updateSection('${sec.id}','color',this.value)" style="width:36px;height:30px;padding:2px;border-radius:6px;flex:none">
+          <span style="font-size:10px;font-weight:700;color:#475569">${secItems.length}項目</span>
+          <button class="btn btn-xs btn-danger" onclick="deleteSection('${sec.id}')">削除</button>
+        </div>
+        <div class="section-card-body">`;
+      if(secItems.length===0){
+        html+=`<div style="color:#94a3b8;font-size:12px;padding:8px">項目がありません</div>`;
+      }
+      secItems.forEach((it,itIdx)=>{
+        html+=`<div class="admin-row">
+          <button class="btn btn-xs btn-ghost" onclick="moveItem('${it.id}',-1)" ${itIdx===0?'disabled style="opacity:.3"':''}>↑</button>
+          <button class="btn btn-xs btn-ghost" onclick="moveItem('${it.id}',1)" ${itIdx===secItems.length-1?'disabled style="opacity:.3"':''}>↓</button>
+          <input type="text" value="${(it.label||'').replace(/"/g,'&quot;')}" onblur="updateItem('${it.id}','label',this.value)">
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:900;cursor:pointer;white-space:nowrap;flex:none">
+            <input type="checkbox" ${it.for_parttime?'checked':''} onchange="updateItem('${it.id}','for_parttime',this.checked)" style="width:18px;height:18px;flex:none">
+            <span style="color:#15803d">バイト</span>
+          </label>
+          <button class="btn btn-xs btn-danger" onclick="deleteItem('${it.id}')">削除</button>
+        </div>`;
+      });
+      html+=`</div></div>`;
+    });
+    html+=`<div style="background:#dcfce7;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-top:10px">
+          <div style="font-size:12px;font-weight:900;margin-bottom:6px">＋ 新しい項目を追加</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <select onchange="S.newItemSectionId=this.value">
+              <option value="">セクションを選択</option>
+              ${sortedSections.map(s=>`<option value="${s.id}" ${S.newItemSectionId===s.id?'selected':''}>${s.name}</option>`).join('')}
+            </select>
+            <input type="text" placeholder="項目名 (例: 仕込みの正確さ)" value="${S.newItemLabel}" oninput="S.newItemLabel=this.value">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
+              <input type="checkbox" ${S.newItemForPart?'checked':''} onchange="S.newItemForPart=this.checked" style="width:20px;height:20px;flex:none">
+              <span>アルバイトもこの項目を評価する</span>
+            </label>
+            <button class="btn btn-primary" onclick="addItem()">＋ 項目を追加</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(S.tab==='traits'){
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">⭐ 特殊能力マスターの管理</div>
+      <div style="padding:12px">
+        <div style="background:#e0f2fe;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#0f172a;line-height:1.6">
+          💡 評価フォームに表示される「特殊能力」の一覧を管理できます。<br>
+          プラスの点数=ボーナス / マイナス=ペナルティ。
+        </div>`;
+    if(S.traitOptions.length===0){
+      html+=`<div style="color:#94a3b8;padding:10px;font-size:12px">特殊能力が登録されていません</div>`;
+    }else{
+      S.traitOptions.forEach(t=>{
+        html+=`<div class="admin-row">
+          <input type="text" value="${(t.name||'').replace(/"/g,'&quot;')}" onblur="updateTraitOption('${t.id}','name',this.value)" style="min-width:140px">
+          <input type="number" value="${t.score}" onchange="updateTraitOption('${t.id}','score',this.value)" style="width:80px;flex:none;padding:6px 10px;text-align:center">
+          <span style="font-size:11px;font-weight:900;color:${t.score>0?'#15803d':t.score<0?'#dc2626':'#475569'};min-width:40px;text-align:right">${t.score>0?'+':''}${t.score}点</span>
+          <button class="btn btn-xs btn-danger" onclick="delTraitOption('${t.id}')">削除</button>
+        </div>`;
+      });
+    }
+    html+=`<div style="background:#fef3c7;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-top:12px">
+          <div style="font-size:12px;font-weight:900;margin-bottom:6px">＋ 新しい特殊能力を追加</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <input type="text" placeholder="能力名 (例: 出汁の目利き)" value="${S.newTrait.name}" oninput="S.newTrait.name=this.value" style="flex:1;min-width:140px">
+            <input type="number" placeholder="点数" value="${S.newTrait.score}" oninput="S.newTrait.score=this.value" style="width:80px;flex:none;padding:6px 10px;text-align:center">
+            <button class="btn btn-primary btn-sm" onclick="addTraitOption()">追加</button>
+          </div>
+          <div style="font-size:10px;color:#64748b;margin-top:6px">プラス: ボーナス / マイナス: ペナルティ</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(S.tab==='quals'){
+    const qualTarget=S.staff.find(s=>s.id===S.qualTargetStaffId);
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900">🎖 資格マスター管理</div>
+      <div style="padding:12px">
+        <div style="background:#e0f2fe;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#0f172a;line-height:1.6">
+          💡 資格を登録して、スタッフごとに保有資格を紐付けできます。<br>
+          紐付けた資格は集計画面の「個別カード」で🎖バッジとして表示されます。
+        </div>`;
+    // 資格マスター一覧
+    if(S.qualifications.length===0){
+      html+=`<div style="color:#94a3b8;padding:10px;font-size:12px">資格が登録されていません</div>`;
+    }else{
+      S.qualifications.forEach(q=>{
+        html+=`<div class="admin-row">
+          <input type="text" value="${(q.name||'').replace(/"/g,'&quot;')}" onblur="updateQualification('${q.id}',this.value)" style="min-width:140px">
+          <button class="btn btn-xs btn-danger" onclick="delQualification('${q.id}')">削除</button>
+        </div>`;
+      });
+    }
+    html+=`<div style="background:#fef3c7;border:2px solid #1e293b;border-radius:12px;padding:10px;margin-top:12px">
+        <div style="font-size:12px;font-weight:900;margin-bottom:6px">＋ 新しい資格を追加</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input type="text" placeholder="資格名 (例: 調理師免許)" value="${S.newQualification}" oninput="S.newQualification=this.value" style="flex:1;min-width:140px">
+          <button class="btn btn-primary btn-sm" onclick="addQualification()">追加</button>
+        </div>
+      </div>`;
+
+    // スタッフに資格を紐付けるUI
+    html+=`<div style="margin-top:18px;padding-top:12px;border-top:2px solid #e2e8f0">
+      <div style="font-size:13px;font-weight:900;margin-bottom:8px">🔗 スタッフに資格を紐付け</div>
+      <select onchange="S.qualTargetStaffId=this.value;render()" style="margin-bottom:10px">
+        <option value="">— スタッフを選択 —</option>
+        ${S.staff.map(m=>{
+          const label=m.position?`${m.name}（${m.position}）`:m.name;
+          return`<option value="${m.id}" ${S.qualTargetStaffId===m.id?'selected':''}>${label}</option>`;
+        }).join('')}
+      </select>`;
+
+    if(qualTarget){
+      html+=`<div style="background:#f8fafc;border:1.5px solid #1e293b;border-radius:10px;padding:10px">
+        <div style="font-size:12px;font-weight:900;margin-bottom:8px">${qualTarget.name} の保有資格</div>
+        <div style="display:flex;flex-direction:column;gap:4px">`;
+      S.qualifications.forEach(q=>{
+        const has=S.staffQualifications.some(x=>x.staff_id===qualTarget.id&&x.qualification_id===q.id);
+        html+=`<label style="display:flex;align-items:center;gap:10px;padding:6px 8px;border:1.5px solid ${has?'#1e293b':'#cbd5e1'};border-radius:8px;background:${has?'#fef3c7':'#fff'};cursor:pointer;font-size:13px;font-weight:700">
+          <input type="checkbox" ${has?'checked':''} onchange="toggleStaffQualification('${qualTarget.id}','${q.id}')" style="width:20px;height:20px;flex:none;margin:0">
+          <span>🎖 ${q.name}</span>
+        </label>`;
+      });
+      if(S.qualifications.length===0){
+        html+=`<div style="color:#94a3b8;font-size:12px">先に資格を登録してください</div>`;
+      }
+      html+=`</div></div>`;
+    }
+
+    html+=`</div></div></div>`;
+  }
+
+  document.getElementById('app').innerHTML=html;
+}
+
+loadAll();
+</script>
+</body>
+</html>
