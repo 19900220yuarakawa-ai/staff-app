@@ -94,6 +94,8 @@ let S={
   newStaff:{name:'',position:'',note:''},
   newQualification:{name:'',score:0},
   qualTargetStaffId:'',
+  // 店舗実績入力用
+  storePerf:{storeId:'',values:{}}, // {storeId, values:{itemId:score}}
   newStore:{name:'',color:'#e0f2fe'},
   storeSectionOpen:false,
   storeTargetStaffId:'',
@@ -168,28 +170,38 @@ function computeStaffRadar(staffId,periodId){
 
   const staffEvals=evals.filter(e=>e.evaluation_type==='staff');
   const partEvals=evals.filter(e=>e.evaluation_type==='parttime');
+  const adminEvals=evals.filter(e=>e.evaluation_type==='admin');
   const staffEvalIds=new Set(staffEvals.map(e=>e.id));
   const partEvalIds=new Set(partEvals.map(e=>e.id));
+  const adminEvalIds=new Set(adminEvals.map(e=>e.id));
 
   const sortedSections=[...S.sections].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   const axes=sortedSections.map(sec=>{
     const secItems=S.items.filter(i=>i.section_id===sec.id);
     const secItemIds=new Set(secItems.map(i=>i.id));
-    const staffVals=[],partVals=[];
+    const staffVals=[],partVals=[],adminVals=[];
     scores.forEach(s=>{
       const key=s.item_id||s.item_key;
       if(secItemIds.has(key)&&s.score>0){
         if(staffEvalIds.has(s.evaluation_id))staffVals.push(s.score);
         else if(partEvalIds.has(s.evaluation_id))partVals.push(s.score);
+        else if(adminEvalIds.has(s.evaluation_id))adminVals.push(s.score);
       }
     });
     const staffAvg=staffVals.length?staffVals.reduce((a,b)=>a+b,0)/staffVals.length:null;
     const partAvg=partVals.length?partVals.reduce((a,b)=>a+b,0)/partVals.length:null;
+    const adminAvg=adminVals.length?adminVals.reduce((a,b)=>a+b,0)/adminVals.length:null;
     let avg=0;
-    if(staffAvg!==null&&partAvg!==null)avg=(staffAvg+partAvg)/2;
-    else if(staffAvg!==null)avg=staffAvg;
-    else if(partAvg!==null)avg=partAvg;
-    return{id:sec.id,label:sec.name,color:sec.color||'#f8fafc',score:avg,count:staffVals.length+partVals.length};
+    // 本部採点(admin)セクション: adminスコアのみを使用
+    if(sec.evaluator==='admin'){
+      avg=adminAvg!==null?adminAvg:0;
+    }else{
+      // 通常セクション: 社員さん+アルバイトさんを1:1合算
+      if(staffAvg!==null&&partAvg!==null)avg=(staffAvg+partAvg)/2;
+      else if(staffAvg!==null)avg=staffAvg;
+      else if(partAvg!==null)avg=partAvg;
+    }
+    return{id:sec.id,label:sec.name,color:sec.color||'#f8fafc',score:avg,count:staffVals.length+partVals.length+adminVals.length};
   });
 
   // セクション6個で完結 (旧仕様の追加バイト評価軸は不要)
@@ -540,6 +552,94 @@ async function delEval(id){
   if(!confirm('この評価を削除しますか?'))return;
   await sb.from('employee_evaluations').delete().eq('id',id);
   showToast('削除しました');await loadAll();
+}
+
+// 店舗実績の保存
+async function saveStorePerf(){
+  const storeId=S.storePerf.storeId;
+  if(!storeId){showToast('店舗が選択されていません',true);return;}
+  const store=S.stores.find(s=>s.id===storeId);
+  if(!store){showToast('店舗が見つかりません',true);return;}
+
+  // 採点項目: 本部採点(admin)セクションの項目
+  const adminSections=S.sections.filter(s=>s.evaluator==='admin');
+  const adminItems=[];
+  adminSections.forEach(sec=>{
+    S.items.filter(i=>i.section_id===sec.id&&i.is_active!==false).forEach(it=>adminItems.push(it));
+  });
+
+  if(adminItems.length===0){showToast('店舗実績の評価項目がありません',true);return;}
+
+  // 入力値: ユーザーが選んだ値 or 前回値 or 0
+  const lastScores={};
+  const adminEvals=S.evals.filter(e=>e.evaluation_type==='admin'&&e.target_store_id===storeId).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  if(adminEvals[0]){
+    S.scores.filter(s=>s.evaluation_id===adminEvals[0].id).forEach(s=>{
+      lastScores[s.item_id||s.item_key]=s.score;
+    });
+  }
+
+  const finalValues={};
+  adminItems.forEach(it=>{
+    const v=S.storePerf.values[it.id]!==undefined?S.storePerf.values[it.id]:(lastScores[it.id]||0);
+    if(v>0)finalValues[it.id]=v;
+  });
+
+  const filledCount=Object.keys(finalValues).length;
+  if(filledCount===0){showToast('少なくとも1項目は採点してください',true);return;}
+
+  if(!confirm(`「${store.name}」の店舗実績を保存しますか?\n(${filledCount}/${adminItems.length}項目)\n\nこの店舗に所属する${S.staffStores.filter(ss=>ss.store_id===storeId).length}人のスタッフのレーダーチャートに反映されます。`))return;
+
+  const filledItems=adminItems.filter(it=>finalValues[it.id]>0);
+  const sum=filledItems.reduce((a,it)=>a+finalValues[it.id],0);
+  const avg=sum/filledItems.length;
+
+  try{
+    // 既存の店舗実績データを削除(同じ店舗の古いやつ)
+    if(adminEvals.length>0){
+      const oldIds=adminEvals.map(e=>e.id);
+      await sb.from('employee_evaluations').delete().in('id',oldIds);
+    }
+
+    // この店舗に所属するスタッフ全員に同じ点数で評価データを作成
+    const memberIds=S.staffStores.filter(ss=>ss.store_id===storeId).map(ss=>ss.staff_id);
+    if(memberIds.length===0){
+      showToast('この店舗に紐付いたスタッフがいません',true);
+      return;
+    }
+
+    // 店舗単位の評価1件 + スタッフごとの評価N件
+    const insertRows=memberIds.map(staffId=>({
+      target_staff_id:staffId,
+      target_store_id:storeId,
+      evaluation_type:'admin',
+      average_score:avg,
+      total_score:sum,
+      trait_score:0
+    }));
+
+    const ins=await sb.from('employee_evaluations').insert(insertRows).select();
+    if(ins.error)throw ins.error;
+
+    // 各評価に対してスコアレコードを作成
+    const allScoreRows=[];
+    ins.data.forEach(ev=>{
+      filledItems.forEach(it=>{
+        allScoreRows.push({evaluation_id:ev.id,item_id:it.id,score:finalValues[it.id]});
+      });
+    });
+    if(allScoreRows.length>0){
+      const sc=await sb.from('employee_evaluation_scores').insert(allScoreRows);
+      if(sc.error)throw sc.error;
+    }
+
+    showToast(`${store.name} の店舗実績を保存しました ✅(${memberIds.length}人に反映)`);
+    S.storePerf={storeId:storeId,values:{}};
+    await loadAll();
+  }catch(e){
+    console.error('saveStorePerf error:',e);
+    showToast('保存エラー: '+e.message,true);
+  }
 }
 
 // 特殊能力マスター管理
@@ -2077,6 +2177,7 @@ function renderAdmin(){
     </div>
     <div class="tabs">
       <button class="tab ${S.tab==='summary'?'active':''}" onclick="S.tab='summary';render()">📊 集計</button>
+      <button class="tab ${S.tab==='storeperf'?'active':''}" onclick="S.tab='storeperf';render()">🏢 店舗実績入力</button>
       <button class="tab ${S.tab==='history'?'active':''}" onclick="S.tab='history';render()">📨 送信履歴</button>
       <button class="tab ${S.tab==='partnotes'?'active':''}" onclick="S.tab='partnotes';render()">📝 一言${(S.partnotes||[]).length>0?` <span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px;margin-left:2px">${S.partnotes.length}</span>`:''}</button>
       <button class="tab ${S.tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
@@ -2127,6 +2228,100 @@ function renderAdmin(){
   }
 
 
+
+  if(S.tab==='storeperf'){
+    // 店舗実績(本部採点)用の項目を取得
+    // セクションのevaluator='admin'の項目を探す
+    const adminSections=S.sections.filter(s=>s.evaluator==='admin');
+    const adminItems=[];
+    adminSections.forEach(sec=>{
+      S.items.filter(i=>i.section_id===sec.id&&i.is_active!==false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).forEach(it=>adminItems.push({...it,section:sec}));
+    });
+
+    const sortedStores=[...S.stores].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    const selectedStore=S.stores.find(s=>s.id===S.storePerf.storeId);
+
+    // 選択中の店舗の前回スコアを取得(target_store_id列はないため、別の方法で識別)
+    // ここでは employee_evaluations の evaluation_type='admin' + 直近を探す
+    let lastEvalScores={};
+    if(selectedStore){
+      const adminEvals=S.evals.filter(e=>e.evaluation_type==='admin'&&e.target_store_id===selectedStore.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+      if(adminEvals[0]){
+        const lastEvalId=adminEvals[0].id;
+        S.scores.filter(s=>s.evaluation_id===lastEvalId).forEach(s=>{
+          lastEvalScores[s.item_id||s.item_key]=s.score;
+        });
+      }
+    }
+
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <span>🏢 店舗実績入力</span>
+        ${helpToggleButton('storeperf')}
+      </div>
+      <div style="padding:12px">
+
+        ${helpBlock('storeperf',`<div style="background:#fed7aa;border:1.5px solid #c2410c;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-weight:700;color:#7c2d12;line-height:1.6">
+          💡 店舗実績(売上目標達成率・客単価など)を本部から採点します。<br>
+          📊 入力した点数は、その店舗に所属する全スタッフのレーダーチャートの「店舗実績評価」軸に反映されます。<br>
+          📅 入力するたびに最新データが上書きされます(履歴は「📨 送信履歴」で確認可)。
+        </div>`)}
+
+        ${sortedStores.length===0?`<div style="background:#fef9c3;border:1.5px solid #ca8a04;border-radius:10px;padding:14px;text-align:center;color:#713f12;font-size:13px;font-weight:700">先に「🏢👥 店舗・スタッフ管理」タブで店舗を登録してください</div>`:''}
+        ${adminItems.length===0?`<div style="background:#fee2e2;border:1.5px solid #dc2626;border-radius:10px;padding:14px;text-align:center;color:#7f1d1d;font-size:13px;font-weight:700;margin-top:10px">⚠️ 店舗実績用の評価項目(本部採点)がありません。「📝 評価項目」タブで「店舗実績評価」セクションに項目を追加してください。</div>`:''}
+
+        ${sortedStores.length>0&&adminItems.length>0?`
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;font-weight:900;color:#475569;margin-bottom:6px">対象店舗を選択</div>
+          <select onchange="S.storePerf.storeId=this.value;S.storePerf.values={};render()" style="font-size:14px">
+            <option value="">▼ 店舗を選択してください</option>
+            ${sortedStores.map(st=>{
+              const memberCount=S.staffStores.filter(ss=>ss.store_id===st.id).length;
+              return`<option value="${st.id}" ${S.storePerf.storeId===st.id?'selected':''}>${st.name} (${memberCount}人)</option>`;
+            }).join('')}
+          </select>
+        </div>
+
+        ${selectedStore?`
+        <div style="background:${selectedStore.color||'#fed7aa'};border:2.5px solid #1e293b;border-radius:12px;padding:14px;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <span style="font-size:18px;font-weight:900;color:#0f172a">🏢 ${selectedStore.name}</span>
+            ${evaluatorBadge('admin')}
+            <span style="font-size:11px;font-weight:700;color:#475569">${S.staffStores.filter(ss=>ss.store_id===selectedStore.id).length}人のスタッフに反映</span>
+          </div>
+
+          ${Object.keys(lastEvalScores).length>0?`<div style="background:#fff;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;font-weight:700;color:#475569">📅 前回入力した点数を表示中。変更したい項目だけ選び直して保存してください。</div>`:''}
+
+          ${adminItems.map((it,idx)=>{
+            const v=S.storePerf.values[it.id]!==undefined?S.storePerf.values[it.id]:(lastEvalScores[it.id]||0);
+            const sg=evalScaleGuide();
+            return`<div style="background:#fff;border:1.5px solid #cbd5e1;border-radius:10px;padding:12px;margin-bottom:10px">
+              <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:8px 10px;border-radius:6px;margin-bottom:8px">
+                <div style="font-size:14px;font-weight:900;color:#0f172a;line-height:1.4">
+                  <span style="display:inline-block;background:#1e293b;color:#fde047;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:11px;font-weight:900;margin-right:6px">${idx+1}</span>${it.label}
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px">
+                ${[1,2,3,4,5].map(n=>{
+                  const g=sg.find(x=>x.n===n);
+                  const labels=Array.isArray(it.scaleLabels)&&it.scaleLabels.length===5?it.scaleLabels:['非常に低い','やや低い','標準','高い','非常に高い'];
+                  const selected=v===n;
+                  return`<button type="button" onclick="S.storePerf.values['${it.id}']=${n};render()" style="display:flex;align-items:center;gap:8px;border:2px solid ${selected?g.color:'#e2e8f0'};background:${selected?g.color+'1a':'#fff'};border-radius:8px;padding:7px 10px;cursor:pointer;text-align:left;font-family:inherit;width:100%">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:${selected?g.color:'#fff'};border:2px solid ${selected?g.color:'#cbd5e1'};color:${selected?'#fff':'#94a3b8'};font-size:12px;font-weight:900;flex:none">${n}</span>
+                    <span style="font-size:13px;font-weight:${selected?'900':'700'};color:${selected?'#0f172a':'#475569'};line-height:1.3">${labels[n-1]}</span>
+                  </button>`;
+                }).join('')}
+              </div>
+            </div>`;
+          }).join('')}
+
+          <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;box-shadow:0 4px 0 #1e293b;margin-top:10px" onclick="saveStorePerf()">💾 ${selectedStore.name} の店舗実績を保存</button>
+        </div>
+        `:'<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:8px;padding:20px;text-align:center;color:#94a3b8;font-size:12px;font-weight:700">↑ 上で「対象店舗」を選択してください</div>'}
+        `:''}
+      </div>
+    </div>`;
+  }
 
   if(S.tab==='history'){
     // 評価データの一覧表示+削除機能
