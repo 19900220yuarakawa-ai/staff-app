@@ -216,6 +216,10 @@ function computeStaffRadar(staffId,periodId){
   // 総合平均: 全セクションの軸スコアの平均(0スコアは除外)
   const validAxisScores=axes.map(a=>a.score).filter(v=>v>0);
   const totalAvg=validAxisScores.length?validAxisScores.reduce((a,b)=>a+b,0)/validAxisScores.length:0;
+  // 合計点: 6軸 × 4 = 最大120点 + 補正点
+  // 各軸の点数(0〜5)を全部足して4倍 → 0点〜120点
+  const axisSum=axes.reduce((s,a)=>s+(a.score||0),0); // 最大: 5×6=30
+  const baseScore=axisSum*4; // 最大: 120点
   // 後方互換のためstaffOverall/partOverallも残す(他で使ってる)
   const staffOverallAvgs=staffEvals.map(e=>Number(e.average_score||0)).filter(v=>v>0);
   const partOverallAvgs=partEvals.map(e=>Number(e.average_score||0)).filter(v=>v>0);
@@ -241,7 +245,20 @@ function computeStaffRadar(staffId,periodId){
   const qualScore=quals.reduce((s,q)=>s+Number(q.score||0),0);
   const totalTraitScore=traitScore+abilityScore+qualScore;
 
-  return{axes,totalAvg,traitScore:totalTraitScore,qualifications:quals,evalCount:allEvals.filter(e=>e.evaluation_type!=='self').length,allEvalCount:allEvals.length,staffOverall,partOverall};
+  return{axes,totalAvg,baseScore,traitScore:totalTraitScore,qualifications:quals,evalCount:allEvals.filter(e=>e.evaluation_type!=='self').length,allEvalCount:allEvals.length,staffOverall,partOverall};
+}
+
+// 合計点(120点満点+補正)からランクを判定
+// 戻り値: {rank, color}
+function rankFromTotalScore(totalScore){
+  if(totalScore>=110)return{rank:'SS',color:'#15803d'};
+  if(totalScore>=100)return{rank:'S', color:'#15803d'};
+  if(totalScore>=90) return{rank:'A+',color:'#15803d'};
+  if(totalScore>=80) return{rank:'A', color:'#2563eb'};
+  if(totalScore>=70) return{rank:'B+',color:'#d97706'};
+  if(totalScore>=60) return{rank:'B', color:'#d97706'};
+  if(totalScore>0)   return{rank:'C', color:'#dc2626'};
+  return{rank:'—',color:'#94a3b8'};
 }
 
 // SVGレーダーチャート描画
@@ -956,7 +973,7 @@ function renderRadarCards(){
       ${staffData.map(d=>`<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:900;border:1.5px solid ${d.color};border-radius:999px;padding:3px 10px;background:${d.color}15">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${d.color}"></span>
         ${d.member.name}${d.member.position?'（'+d.member.position+'）':''}
-        <span style="color:#64748b;font-weight:700">${d.totalAvg.toFixed(1)}</span>
+        <span style="color:#64748b;font-weight:700">${Math.round(((d.baseScore||0)+d.traitScore)*10)/10}/120</span>
       </div>`).join('')}
     </div>`;
   }else{
@@ -972,9 +989,11 @@ function renderRadarCards(){
         return{label:name,score};
       });
       const ss=getStaffStores(d.member.id);
-      const avg=d.totalAvg;
-      const rank=avg>=4.5?'SS':avg>=4?'S':avg>=3.5?'A+':avg>=3?'A':avg>=2.5?'B+':avg>=2?'B':avg>0?'C':'—';
-      const rankColor=avg>=4?'#15803d':avg>=3?'#2563eb':avg>=2?'#d97706':'#dc2626';
+      const baseScore=d.baseScore||0; // 6軸合計×4 (最大120)
+      const totalScore=Math.max(0,Math.round((baseScore+d.traitScore)*10)/10); // 補正点込み
+      const rankInfo=rankFromTotalScore(totalScore);
+      const rank=rankInfo.rank;
+      const rankColor=rankInfo.color;
       const goal=d.member.note||'';
       const isOpen=S.expandedStaffId===d.member.id;
       const myAllEvals=S.evals.filter(e=>e.target_staff_id===d.member.id&&(!S.periodId||e.period_id===S.periodId));
@@ -996,10 +1015,11 @@ function renderRadarCards(){
                 ${ss.map(s=>`<span style="font-size:10px;font-weight:900;border:1.5px solid #1e293b;border-radius:6px;padding:2px 7px;background:${s.color||'#e0f2fe'};color:#0f172a">🏢 ${s.name}</span>`).join('')}
               </div>`:''}
             </div>
-            <div style="text-align:center;flex:none;background:#f8fafc;border:2px solid #1e293b;border-radius:10px;padding:6px 10px;min-width:70px">
+            <div style="text-align:center;flex:none;background:#f8fafc;border:2px solid #1e293b;border-radius:10px;padding:6px 10px;min-width:80px">
               <div style="font-size:9px;font-weight:900;color:#475569;letter-spacing:0.5px;line-height:1">総合評価</div>
               <div style="font-size:28px;font-weight:900;color:${rankColor};line-height:1;margin-top:3px">${rank}</div>
-              <div style="font-size:10px;font-weight:700;color:#64748b;margin-top:2px">${avg>0?avg.toFixed(2):'—'}</div>
+              <div style="font-size:11px;font-weight:900;color:#0f172a;margin-top:3px">${totalScore}<span style="font-size:9px;color:#64748b;font-weight:700">/120</span></div>
+              ${d.traitScore!==0?`<div style="font-size:9px;font-weight:700;color:${d.traitScore>0?'#15803d':'#dc2626'};margin-top:1px">補正${d.traitScore>=0?'+':''}${d.traitScore}</div>`:''}
             </div>
           </div>
         </div>
@@ -1156,19 +1176,21 @@ function renderRadarCards(){
       <span style="margin:0 6px">2 = やや低い</span>・
       <span style="margin:0 6px">1 = 低い</span>
       <br>
-      <strong style="color:#0f172a">🏆 ランク:</strong>
-      <span style="margin:0 4px;color:#15803d;font-weight:900">SS (4.5+)</span>
-      <span style="margin:0 4px;color:#15803d;font-weight:900">S (4.0+)</span>
-      <span style="margin:0 4px;color:#15803d;font-weight:900">A+ (3.5+)</span>
-      <span style="margin:0 4px;color:#2563eb;font-weight:900">A (3.0+)</span>
-      <span style="margin:0 4px;color:#d97706;font-weight:900">B+ (2.5+)</span>
-      <span style="margin:0 4px;color:#d97706;font-weight:900">B (2.0+)</span>
-      <span style="margin:0 4px;color:#dc2626;font-weight:900">C (1.0+)</span>
+      <strong style="color:#0f172a">🏆 ランク(120点満点):</strong><br>
+      <span style="margin:0 4px;color:#15803d;font-weight:900">SS (110点+)</span>
+      <span style="margin:0 4px;color:#15803d;font-weight:900">S (100点+)</span>
+      <span style="margin:0 4px;color:#15803d;font-weight:900">A+ (90点+)</span>
+      <span style="margin:0 4px;color:#2563eb;font-weight:900">A (80点+)</span>
+      <span style="margin:0 4px;color:#d97706;font-weight:900">B+ (70点+)</span>
+      <span style="margin:0 4px;color:#d97706;font-weight:900">B (60点+)</span>
+      <span style="margin:0 4px;color:#dc2626;font-weight:900">C (60点未満)</span>
       <br>
-      <strong style="color:#0f172a">⚖️ 各セクションの計算方法:</strong>
+      <strong style="color:#0f172a">⚖️ 計算式:</strong>
       <br>
+      <span style="margin:0 6px">合計点 = (6軸の点数の合計) × 4 + 能力補正 + 資格補正</span><br>
+      <span style="margin:0 6px">  例: 各軸4点 → 4×6×4 = 96点 + 能力+5 + 資格+3 = <strong>104点(Sランク)</strong></span><br>
       <span style="margin:0 6px">・🧑 個人評価軸 → <strong>自己評価のみ</strong></span><br>
-      <span style="margin:0 6px">・👥🎓 社員さん/アルバイトさん評価軸 → <strong>社員さん評価とアルバイトさん評価を1:1で合算</strong></span><br>
+      <span style="margin:0 6px">・👥🎓 社員さん/アルバイトさん評価軸 → <strong>1:1で合算</strong></span><br>
       <span style="margin:0 6px">・🏢 店舗実績軸 → <strong>本部採点のみ</strong></span><br>
       <span style="margin:0 6px;color:#475569">※特殊能力・資格による補正点が加算されます</span>
     </div>`);
