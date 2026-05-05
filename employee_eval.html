@@ -1188,11 +1188,34 @@ function updateScaleLabel(itemId,labelIndex,value){
   // 入力中の再描画は控える(キャレット位置がずれるため)
 }
 
-// 選択肢編集を終了
-function finishScaleEdit(){
-  S.scaleEditingItemId='';
-  showToast('保存しました');
-  render();
+// 選択肢編集を終了 → DBに保存
+async function finishScaleEdit(){
+  const itemId=S.scaleEditingItemId;
+  const it=S.items.find(i=>i.id===itemId);
+  if(!it){
+    S.scaleEditingItemId='';
+    render();
+    return;
+  }
+  // ラベル配列を整形
+  let labels=Array.isArray(it.scaleLabels)?it.scaleLabels.slice():['','','','',''];
+  while(labels.length<5)labels.push('');
+  if(labels.length>5)labels=labels.slice(0,5);
+
+  try{
+    const r=await sb.from('employee_eval_items')
+      .update({scale_labels:labels})
+      .eq('id',itemId);
+    if(r.error)throw r.error;
+    S.scaleEditingItemId='';
+    showToast('選択肢を保存しました ✅');
+    await loadAll();
+  }catch(e){
+    console.error('finishScaleEdit error:',e);
+    showToast('保存エラー: '+e.message,true);
+    S.scaleEditingItemId='';
+    render();
+  }
 }
 
 // document全体に委譲リスナーを1つだけ仕掛ける(複数回登録防止)
