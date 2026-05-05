@@ -2001,11 +2001,12 @@ function renderAdmin(){
           <input type="text" value="${(m.note||'').replace(/"/g,'&quot;')}" onblur="updateStaff('${m.id}','note',this.value)" placeholder="🎯 次回査定までの目標 (例: SNS発信を毎日 / 魚調理を覚える)" style="width:100%;padding:6px 10px;font-size:12px;color:#475569;margin-bottom:6px">
           <div style="border-top:1.5px dashed #cbd5e1;padding-top:6px;margin-top:4px">
             <div style="font-size:10px;font-weight:900;color:#475569;margin-bottom:4px">🏢 所属店舗 (複数選択可)</div>
-            ${S.stores.length===0?`<div style="font-size:10px;color:#94a3b8;font-weight:700">店舗マスターで店舗を登録してください</div>`:`<div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${S.stores.length===0?`<div style="font-size:10px;color:#94a3b8;font-weight:700">店舗マスターで店舗を登録してください</div>`:`<div style="display:flex;flex-wrap:wrap;gap:6px">
               ${S.stores.map(st=>{
                 const on=myStores.some(s=>s.id===st.id);
-                return`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;border:1.5px solid ${on?'#1e293b':'#cbd5e1'};border-radius:6px;padding:2px 8px;background:${on?st.color||'#e0f2fe':'#fff'};font-size:11px;font-weight:700">
-                  <input type="checkbox" ${on?'checked':''} onchange="toggleStaffStore('${m.id}','${st.id}')" style="width:14px;height:14px;margin:0">
+                return`<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:2.5px solid ${on?'#15803d':'#cbd5e1'};border-radius:8px;padding:6px 12px;background:${on?st.color||'#e0f2fe':'#fff'};font-size:12px;font-weight:${on?'900':'700'};color:${on?'#0f172a':'#64748b'};box-shadow:${on?'0 2px 0 #15803d':'none'};transition:all 0.15s">
+                  <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:2px solid ${on?'#15803d':'#94a3b8'};border-radius:5px;background:${on?'#15803d':'#fff'};color:#fff;font-size:14px;font-weight:900;flex:none">${on?'✓':''}</span>
+                  <input type="checkbox" ${on?'checked':''} onchange="toggleStaffStore('${m.id}','${st.id}')" style="display:none">
                   ${st.name}
                 </label>`;
               }).join('')}
@@ -2066,8 +2067,9 @@ function renderAdmin(){
                 ${candidates.map(t=>{
                   const has=assigned.includes(t.id);
                   const ss=getStaffStores(t.id).map(s=>s.name).join('・');
-                  return`<label style="display:flex;align-items:center;gap:10px;padding:6px 8px;border:1.5px solid ${has?'#1e293b':'#cbd5e1'};border-radius:8px;background:${has?'#dcfce7':'#fff'};cursor:pointer;font-size:13px;font-weight:700">
-                    <input type="checkbox" ${has?'checked':''} onchange="toggleAssign('${reviewer.id}','${t.id}')" style="width:20px;height:20px;flex:none;margin:0">
+                  return`<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:2.5px solid ${has?'#15803d':'#cbd5e1'};border-radius:8px;background:${has?'#dcfce7':'#fff'};cursor:pointer;font-size:13px;font-weight:${has?'900':'700'};color:${has?'#0f172a':'#475569'};box-shadow:${has?'0 2px 0 #15803d':'none'};transition:all 0.15s">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:2px solid ${has?'#15803d':'#94a3b8'};border-radius:5px;background:${has?'#15803d':'#fff'};color:#fff;font-size:14px;font-weight:900;flex:none">${has?'✓':''}</span>
+                    <input type="checkbox" ${has?'checked':''} onchange="toggleAssign('${reviewer.id}','${t.id}')" style="display:none">
                     <span style="flex:1">${t.name}${t.position?` <span style="font-weight:700;color:#64748b;font-size:11px">(${t.position})</span>`:''}</span>
                     ${ss?`<span style="font-size:10px;font-weight:700;color:#94a3b8">🏢 ${ss}</span>`:''}
                   </label>`;
@@ -2240,8 +2242,9 @@ function renderAdmin(){
                   const has=(S.abilities||[]).some(a=>a.target_staff_id===targetStaff.id&&a.label===t.name);
                   const sc=Number(t.score||0);
                   const scColor=sc>0?'#15803d':sc<0?'#dc2626':'#475569';
-                  return`<label style="display:flex;align-items:center;gap:10px;padding:6px 8px;border:1.5px solid ${has?'#1e293b':'#cbd5e1'};border-radius:8px;background:${has?'#fef3c7':'#fff'};cursor:pointer;font-size:13px;font-weight:700">
-                    <input type="checkbox" ${has?'checked':''} onchange="toggleStaffAbility('${targetStaff.id}','${t.name.replace(/'/g,"\\'")}',${sc})" style="width:20px;height:20px;flex:none;margin:0">
+                  return`<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:2.5px solid ${has?'#d97706':'#cbd5e1'};border-radius:8px;background:${has?'#fef3c7':'#fff'};cursor:pointer;font-size:13px;font-weight:${has?'900':'700'};color:${has?'#0f172a':'#475569'};box-shadow:${has?'0 2px 0 #d97706':'none'};transition:all 0.15s">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:2px solid ${has?'#d97706':'#94a3b8'};border-radius:5px;background:${has?'#d97706':'#fff'};color:#fff;font-size:14px;font-weight:900;flex:none">${has?'✓':''}</span>
+                    <input type="checkbox" ${has?'checked':''} onchange="toggleStaffAbility('${targetStaff.id}','${t.name.replace(/'/g,"\\'")}',${sc})" style="display:none">
                     <span style="flex:1">⭐ ${t.name}</span>
                     <span style="font-size:11px;font-weight:900;color:${scColor}">${sc>0?'+':''}${sc}点</span>
                   </label>`;
@@ -2298,8 +2301,9 @@ function renderAdmin(){
         const has=S.staffQualifications.some(x=>x.staff_id===qualTarget.id&&x.qualification_id===q.id);
         const sc=Number(q.score||0);
         const scColor=sc>0?'#15803d':sc<0?'#dc2626':'#475569';
-        html+=`<label style="display:flex;align-items:center;gap:10px;padding:6px 8px;border:1.5px solid ${has?'#1e293b':'#cbd5e1'};border-radius:8px;background:${has?'#fef3c7':'#fff'};cursor:pointer;font-size:13px;font-weight:700">
-          <input type="checkbox" ${has?'checked':''} onchange="toggleStaffQualification('${qualTarget.id}','${q.id}')" style="width:20px;height:20px;flex:none;margin:0">
+        html+=`<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:2.5px solid ${has?'#7c3aed':'#cbd5e1'};border-radius:8px;background:${has?'#f3e8ff':'#fff'};cursor:pointer;font-size:13px;font-weight:${has?'900':'700'};color:${has?'#0f172a':'#475569'};box-shadow:${has?'0 2px 0 #7c3aed':'none'};transition:all 0.15s">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:2px solid ${has?'#7c3aed':'#94a3b8'};border-radius:5px;background:${has?'#7c3aed':'#fff'};color:#fff;font-size:14px;font-weight:900;flex:none">${has?'✓':''}</span>
+          <input type="checkbox" ${has?'checked':''} onchange="toggleStaffQualification('${qualTarget.id}','${q.id}')" style="display:none">
           <span style="flex:1">🎖 ${q.name}</span>
           <span style="font-size:11px;font-weight:900;color:${scColor}">${sc>0?'+':''}${sc}点</span>
         </label>`;
