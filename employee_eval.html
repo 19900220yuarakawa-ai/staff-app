@@ -1542,7 +1542,7 @@ function renderStepCombined(){
 }
 
 // 個人評価+他者一括の送信
-async function submitCombined(){
+function submitCombined(){
   const reviewer=S.staff.find(m=>m.id===S.reviewerStaffId);
   if(!reviewer){showToast('評価者が選択されていません',true);return;}
 
@@ -1560,9 +1560,58 @@ async function submitCombined(){
     });
   });
 
-  if(unfilledTotal>0){
-    if(!confirm(`未回答が${unfilledTotal}項目あります。それでも送信しますか?\n(未回答はスキップされます)`))return;
-  }
+  const completedTargets=targets.filter(t=>{
+    const myValues=S.batchForm.values[t.id]||{};
+    return otherItems.some(i=>(myValues[i.id]||0)>0);
+  }).length;
+
+  // 確認モーダル(同じ仕組み)
+  showConfirmModalForCombined({reviewer,targets,unfilledCount:unfilledTotal,selfFilled:selfFilled.length,selfTotal:selfItems.length,completedTargets});
+}
+
+// 統合フォーム用の確認モーダル
+function showConfirmModalForCombined({reviewer,targets,unfilledCount,selfFilled,selfTotal,completedTargets}){
+  const modal=document.createElement('div');
+  modal.id='confirm-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`
+    <div style="background:#fff;border:3px solid #1e293b;border-radius:16px;max-width:480px;width:100%;padding:18px;box-shadow:0 8px 0 #1e293b;max-height:90vh;overflow-y:auto">
+      <div style="font-size:18px;font-weight:900;color:#0f172a;margin-bottom:12px;text-align:center">📤 送信前の最終確認</div>
+      <div style="background:#fff3c7;border:2.5px solid #ca8a04;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:900;color:#713f12;margin-bottom:8px">⚠️ 重要: お名前の確認</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.6">あなたは本当に<br><span style="display:inline-block;background:#fde047;border:2px solid #1e293b;border-radius:8px;padding:6px 14px;margin:6px 0;font-size:18px;font-weight:900">${reviewer.name}${reviewer.position?'('+reviewer.position+')':''}</span><br>さんで間違いないですか?<br><br><span style="color:#dc2626;font-weight:900">⚠️ 違う名前で送信すると、その人の自己評価として記録されてしまいます</span></div>
+      </div>
+      <div style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px;font-weight:700;color:#475569;line-height:1.6">
+        📋 送信内容:<br>
+        ・あなたの自己評価: <strong style="color:#0f172a">${selfFilled}/${selfTotal}問</strong>回答<br>
+        ・他の社員さんの評価: <strong style="color:#0f172a">${completedTargets}/${targets.length}人</strong>分<br>
+        ${unfilledCount>0?`・未回答: <strong style="color:#dc2626">${unfilledCount}項目</strong>(送信時はスキップされます)`:'・<strong style="color:#15803d">すべて回答済み</strong> ✅'}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="confirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">◀ 戻って修正</button>
+        <button id="confirm-send" class="btn btn-primary" style="flex:2;padding:14px;font-size:14px;box-shadow:0 4px 0 #1e293b">📤 はい、${reviewer.name}で送信</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('confirm-cancel').onclick=()=>modal.remove();
+  document.getElementById('confirm-send').onclick=async()=>{
+    document.getElementById('confirm-send').disabled=true;
+    document.getElementById('confirm-send').textContent='送信中...';
+    await doSubmitCombined();
+    modal.remove();
+  };
+}
+
+// 実際の送信処理
+async function doSubmitCombined(){
+  const reviewer=S.staff.find(m=>m.id===S.reviewerStaffId);
+  if(!reviewer){showToast('評価者が選択されていません',true);return;}
+
+  const selfItems=S.items.filter(i=>i.for_self&&i.is_active!==false);
+  const selfFilled=selfItems.filter(i=>(S.form.values[i.id]||0)>0);
+
+  const otherItems=S.items.filter(i=>i.for_staff&&i.is_active!==false);
+  const targets=getTargetsForReviewer(reviewer.id);
 
   let savedCount=0;
   try{
@@ -1791,7 +1840,115 @@ function renderStepOthers(){
 }
 
 // 一括送信(個人評価+他者評価)
-async function submitAllSteps(){
+// 送信前: 確認モーダル表示
+function submitAllSteps(){
+  const type=S.mode;
+  const reviewer=type==='staff'?S.staff.find(m=>m.id===S.reviewerStaffId):null;
+
+  let items;
+  if(type==='staff')items=S.items.filter(i=>i.for_staff&&i.is_active!==false);
+  else items=S.items.filter(i=>i.for_parttime&&i.is_active!==false);
+
+  let targets;
+  if(type==='staff')targets=getTargetsForReviewer(S.reviewerStaffId);
+  else{
+    targets=S.staff.filter(s=>s.is_active!==false);
+    if(S.urlStoreId){
+      const allowedStaffIds=new Set(
+        S.staffStores.filter(ss=>ss.store_id===S.urlStoreId).map(ss=>ss.staff_id)
+      );
+      targets=targets.filter(s=>allowedStaffIds.has(s.id));
+    }
+  }
+
+  // 未回答チェック
+  let unfilledCount=0;
+  targets.forEach(t=>{
+    items.forEach(i=>{
+      const v=(S.batchForm.values[t.id]||{})[i.id]||0;
+      if(v===0)unfilledCount++;
+    });
+  });
+
+  // 個人評価項目の回答(社員モードのみ)
+  let selfFilled=[];
+  let selfTotal=0;
+  if(type==='staff'&&reviewer){
+    const selfItems=S.items.filter(i=>i.for_self&&i.is_active!==false);
+    selfTotal=selfItems.length;
+    selfFilled=selfItems.filter(i=>(S.form.values[i.id]||0)>0);
+    if(selfFilled.length<selfTotal)unfilledCount+=(selfTotal-selfFilled.length);
+  }
+
+  // 完了済み件数
+  const completedTargets=targets.filter(t=>{
+    const myValues=S.batchForm.values[t.id]||{};
+    return items.some(i=>(myValues[i.id]||0)>0);
+  }).length;
+
+  // 確認モーダル表示
+  showConfirmModal({type,reviewer,targets,unfilledCount,selfFilled:selfFilled.length,selfTotal,completedTargets});
+}
+
+// 送信確認モーダル
+function showConfirmModal({type,reviewer,targets,unfilledCount,selfFilled,selfTotal,completedTargets}){
+  // モーダル背景
+  const modal=document.createElement('div');
+  modal.id='confirm-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadein 0.2s';
+
+  let inner='';
+  if(type==='staff'&&reviewer){
+    inner=`
+      <div style="background:#fff3c7;border:2.5px solid #ca8a04;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:900;color:#713f12;margin-bottom:8px">⚠️ 重要: お名前の確認</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.6">あなたは本当に<br><span style="display:inline-block;background:#fde047;border:2px solid #1e293b;border-radius:8px;padding:6px 14px;margin:6px 0;font-size:18px;font-weight:900">${reviewer.name}${reviewer.position?'('+reviewer.position+')':''}</span><br>さんで間違いないですか?<br><br><span style="color:#dc2626;font-weight:900">⚠️ 違う名前で送信すると、その人の自己評価として記録されてしまいます</span></div>
+      </div>
+      <div style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px;font-weight:700;color:#475569;line-height:1.6">
+        📋 送信内容:<br>
+        ・あなたの自己評価: <strong style="color:#0f172a">${selfFilled}/${selfTotal}問</strong>回答<br>
+        ・他の社員さんの評価: <strong style="color:#0f172a">${completedTargets}/${targets.length}人</strong>分<br>
+        ${unfilledCount>0?`・未回答: <strong style="color:#dc2626">${unfilledCount}項目</strong>(送信時はスキップされます)`:'・<strong style="color:#15803d">すべて回答済み</strong> ✅'}
+      </div>`;
+  }else{
+    // parttimeモード
+    inner=`
+      <div style="background:#dcfce7;border:2.5px solid #15803d;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:900;color:#14532d;margin-bottom:8px">🔒 匿名アンケートの送信確認</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;line-height:1.6">
+          回答は<strong>完全に匿名</strong>です。誰が送信したかは記録されません。<br>
+          本当に送信してもよろしいですか?
+        </div>
+      </div>
+      <div style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px;font-weight:700;color:#475569;line-height:1.6">
+        📋 送信内容:<br>
+        ・社員さんの評価: <strong style="color:#0f172a">${completedTargets}/${targets.length}人</strong>分<br>
+        ${unfilledCount>0?`・未回答: <strong style="color:#dc2626">${unfilledCount}項目</strong>(送信時はスキップされます)`:'・<strong style="color:#15803d">すべて回答済み</strong> ✅'}
+      </div>`;
+  }
+
+  modal.innerHTML=`
+    <div style="background:#fff;border:3px solid #1e293b;border-radius:16px;max-width:480px;width:100%;padding:18px;box-shadow:0 8px 0 #1e293b;max-height:90vh;overflow-y:auto">
+      <div style="font-size:18px;font-weight:900;color:#0f172a;margin-bottom:12px;text-align:center">📤 送信前の最終確認</div>
+      ${inner}
+      <div style="display:flex;gap:8px">
+        <button id="confirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">◀ 戻って修正</button>
+        <button id="confirm-send" class="btn btn-primary" style="flex:2;padding:14px;font-size:14px;box-shadow:0 4px 0 #1e293b">📤 ${type==='staff'&&reviewer?'はい、'+reviewer.name+'で送信':'匿名で送信'}</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  document.getElementById('confirm-cancel').onclick=()=>modal.remove();
+  document.getElementById('confirm-send').onclick=async()=>{
+    document.getElementById('confirm-send').disabled=true;
+    document.getElementById('confirm-send').textContent='送信中...';
+    await doSubmitAllSteps();
+    modal.remove();
+  };
+}
+
+// 実際の送信処理
+async function doSubmitAllSteps(){
   const type=S.mode;
   const reviewer=type==='staff'?S.staff.find(m=>m.id===S.reviewerStaffId):null;
 
@@ -1818,18 +1975,6 @@ async function submitAllSteps(){
   if(type==='staff'&&reviewer){
     const selfItems=S.items.filter(i=>i.for_self&&i.is_active!==false);
     selfFilled=selfItems.filter(i=>(S.form.values[i.id]||0)>0);
-  }
-
-  // 未回答チェック
-  let unfilledCount=0;
-  targets.forEach(t=>{
-    items.forEach(i=>{
-      const v=(S.batchForm.values[t.id]||{})[i.id]||0;
-      if(v===0)unfilledCount++;
-    });
-  });
-  if(unfilledCount>0){
-    if(!confirm(`未回答が${unfilledCount}項目あります。それでも送信しますか?\n(未回答はスキップされます)`))return;
   }
 
   let savedCount=0;
@@ -1932,6 +2077,7 @@ function renderAdmin(){
     </div>
     <div class="tabs">
       <button class="tab ${S.tab==='summary'?'active':''}" onclick="S.tab='summary';render()">📊 集計</button>
+      <button class="tab ${S.tab==='history'?'active':''}" onclick="S.tab='history';render()">📨 送信履歴</button>
       <button class="tab ${S.tab==='partnotes'?'active':''}" onclick="S.tab='partnotes';render()">📝 一言${(S.partnotes||[]).length>0?` <span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px;margin-left:2px">${S.partnotes.length}</span>`:''}</button>
       <button class="tab ${S.tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
       <button class="tab ${S.tab==='masters'?'active':''}" onclick="S.tab='masters';render()">⭐ 能力・資格マスター</button>
@@ -1981,6 +2127,68 @@ function renderAdmin(){
   }
 
 
+
+  if(S.tab==='history'){
+    // 評価データの一覧表示+削除機能
+    const sortedEvals=[...S.evals].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const typeColor={self:'#475569',staff:'#9d174d',parttime:'#166534'};
+    const typeLabel={self:'🧑 自己評価',staff:'👥 社員さん評価',parttime:'🎓 アルバイトさん評価'};
+    const typeBg={self:'#f1f5f9',staff:'#fce7f3',parttime:'#dcfce7'};
+
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <span>📨 送信履歴 (${sortedEvals.length}件)</span>
+        ${helpToggleButton('history')}
+      </div>
+      <div style="padding:12px">
+
+        ${helpBlock('history',`<div style="background:#fff3c7;border:1.5px solid #ca8a04;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:11px;font-weight:700;color:#713f12;line-height:1.6">
+          💡 すべての送信済み評価データを一覧表示します。<br>
+          ⚠️ <strong>誤って2回送信された場合</strong>や<strong>違う名前で送信された場合</strong>は、ここから個別に削除できます。<br>
+          🔒 アルバイトさんの評価(👥バッジ無し)は完全匿名のため、誰が送信したかは分かりません。
+        </div>`)}
+
+        ${sortedEvals.length===0?`<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:10px;padding:30px 20px;text-align:center;color:#94a3b8;font-size:13px;font-weight:700">まだ送信された評価データがありません</div>`:''}
+
+        ${sortedEvals.map(ev=>{
+          const targetStaff=S.staff.find(s=>s.id===ev.target_staff_id);
+          const date=new Date(ev.created_at);
+          const dateStr=date.toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+          const tcolor=typeColor[ev.evaluation_type]||'#475569';
+          const tlabel=typeLabel[ev.evaluation_type]||ev.evaluation_type;
+          const tbg=typeBg[ev.evaluation_type]||'#f1f5f9';
+          const avg=Number(ev.average_score||0).toFixed(2);
+          // この評価のスコアを取得して何問回答したか集計
+          const myScores=S.scores.filter(s=>s.evaluation_id===ev.id&&s.score>0);
+          const isExpanded=S.expandedEvalId===ev.id;
+
+          return`<div style="border:2px solid ${tcolor};border-radius:10px;background:${tbg};margin-bottom:8px;overflow:hidden">
+            <div style="padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="background:${tcolor};color:#fff;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:900;flex:none">${tlabel}</span>
+              <div style="flex:1;min-width:140px">
+                <div style="font-size:13px;font-weight:900;color:#0f172a">${targetStaff?targetStaff.name:'(削除済みスタッフ)'}${targetStaff&&targetStaff.position?` <span style="font-size:11px;font-weight:700;color:#64748b">(${targetStaff.position})</span>`:''}</div>
+                <div style="font-size:10px;font-weight:700;color:#64748b;margin-top:1px">📅 ${dateStr} / 平均 ${avg}点 / ${myScores.length}問回答</div>
+              </div>
+              <button class="btn btn-xs btn-ghost" onclick="S.expandedEvalId='${isExpanded?'':ev.id}';render()">${isExpanded?'▼ 閉じる':'▶ 詳細'}</button>
+              <button class="btn btn-xs btn-danger" onclick="delEval('${ev.id}')">🗑 削除</button>
+            </div>
+            ${isExpanded?`<div style="background:#fff;border-top:1.5px dashed ${tcolor};padding:10px 12px">
+              <div style="font-size:10px;font-weight:900;color:#475569;margin-bottom:6px">回答内容(${myScores.length}問):</div>
+              ${myScores.length===0?'<div style="color:#94a3b8;font-size:11px">回答データなし</div>':myScores.map(sc=>{
+                const it=S.items.find(i=>i.id===(sc.item_id||sc.item_key));
+                const dots=Array.from({length:5},(_,i)=>`<span style="color:${i<sc.score?'#dc2626':'#e2e8f0'};font-size:9px">●</span>`).join('');
+                return`<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:#f8fafc;border-radius:4px;margin-bottom:2px;font-size:11px">
+                  <span style="flex:1;color:#0f172a;font-weight:700">${it?it.label:'(削除済み項目)'}</span>
+                  <span style="font-family:monospace;letter-spacing:1px">${dots}</span>
+                  <span style="font-weight:900;color:#1e293b;min-width:24px;text-align:right">${sc.score}</span>
+                </div>`;
+              }).join('')}
+            </div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
 
   if(S.tab==='guide'){
     const sortedStores=[...S.stores].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
