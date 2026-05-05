@@ -938,9 +938,9 @@ function renderRadarCards(){
 
       ${helpBlock('summary',`
       <div style="background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;margin-bottom:14px">
-        <div style="font-size:11px;font-weight:900;color:#475569;margin-bottom:6px">📊 6軸の評価者</div>
+        <div style="font-size:11px;font-weight:900;color:#475569;margin-bottom:6px">📊 6軸の構成</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${sortedSections.map(s=>`<div style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid ${s.color||'#cbd5e1'};border-radius:6px;padding:3px 8px"><span style="font-size:11px;font-weight:900;color:#0f172a">${s.name}</span>${evaluatorBadge(s.evaluator)}</div>`).join('')}
+          ${sortedSections.map(s=>`<div style="display:inline-flex;align-items:center;gap:4px;background:${s.color||'#fff'};border:1.5px solid #cbd5e1;border-radius:6px;padding:3px 10px"><span style="font-size:11px;font-weight:900;color:#0f172a">${s.name}</span></div>`).join('')}
         </div>
       </div>
       `)}`;
@@ -1110,7 +1110,6 @@ function renderRadarCards(){
                   itemHtml+=`<div style="margin-bottom:4px">
                     <div style="display:inline-flex;align-items:center;gap:4px;margin-bottom:2px;flex-wrap:wrap">
                       <span style="font-size:9px;font-weight:900;background:${sec.color||'#f8fafc'};border:1.5px solid #1e293b;border-radius:4px;padding:1px 6px;display:inline-block">${sec.name}</span>
-                      ${sec.evaluator?evaluatorBadge(sec.evaluator):''}
                     </div>
                     ${rows}
                   </div>`;
