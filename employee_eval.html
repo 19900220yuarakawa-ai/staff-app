@@ -164,13 +164,15 @@ function computeStaffRadar(staffId,periodId){
     e.target_staff_id===staffId &&
     (!periodId||e.period_id===periodId)
   );
-  const evals=allEvals.filter(e=>e.evaluation_type!=='self');
-  const evalIds=evals.map(e=>e.id);
+  // self も含めて全評価を取得(セクションの evaluator に応じて使い分ける)
+  const evalIds=allEvals.map(e=>e.id);
   const scores=S.scores.filter(s=>evalIds.includes(s.evaluation_id));
 
-  const staffEvals=evals.filter(e=>e.evaluation_type==='staff');
-  const partEvals=evals.filter(e=>e.evaluation_type==='parttime');
-  const adminEvals=evals.filter(e=>e.evaluation_type==='admin');
+  const selfEvals=allEvals.filter(e=>e.evaluation_type==='self');
+  const staffEvals=allEvals.filter(e=>e.evaluation_type==='staff');
+  const partEvals=allEvals.filter(e=>e.evaluation_type==='parttime');
+  const adminEvals=allEvals.filter(e=>e.evaluation_type==='admin');
+  const selfEvalIds=new Set(selfEvals.map(e=>e.id));
   const staffEvalIds=new Set(staffEvals.map(e=>e.id));
   const partEvalIds=new Set(partEvals.map(e=>e.id));
   const adminEvalIds=new Set(adminEvals.map(e=>e.id));
@@ -179,41 +181,46 @@ function computeStaffRadar(staffId,periodId){
   const axes=sortedSections.map(sec=>{
     const secItems=S.items.filter(i=>i.section_id===sec.id);
     const secItemIds=new Set(secItems.map(i=>i.id));
-    const staffVals=[],partVals=[],adminVals=[];
+    const selfVals=[],staffVals=[],partVals=[],adminVals=[];
     scores.forEach(s=>{
       const key=s.item_id||s.item_key;
       if(secItemIds.has(key)&&s.score>0){
-        if(staffEvalIds.has(s.evaluation_id))staffVals.push(s.score);
+        if(selfEvalIds.has(s.evaluation_id))selfVals.push(s.score);
+        else if(staffEvalIds.has(s.evaluation_id))staffVals.push(s.score);
         else if(partEvalIds.has(s.evaluation_id))partVals.push(s.score);
         else if(adminEvalIds.has(s.evaluation_id))adminVals.push(s.score);
       }
     });
+    const selfAvg=selfVals.length?selfVals.reduce((a,b)=>a+b,0)/selfVals.length:null;
     const staffAvg=staffVals.length?staffVals.reduce((a,b)=>a+b,0)/staffVals.length:null;
     const partAvg=partVals.length?partVals.reduce((a,b)=>a+b,0)/partVals.length:null;
     const adminAvg=adminVals.length?adminVals.reduce((a,b)=>a+b,0)/adminVals.length:null;
     let avg=0;
-    // 本部採点(admin)セクション: adminスコアのみを使用
+    // 本部採点(admin)セクション: adminスコアのみ
     if(sec.evaluator==='admin'){
       avg=adminAvg!==null?adminAvg:0;
-    }else{
-      // 通常セクション: 社員さん+アルバイトさんを1:1合算
+    }
+    // 個人評価(self)セクション: 自己評価のみ
+    else if(sec.evaluator==='self'){
+      avg=selfAvg!==null?selfAvg:0;
+    }
+    // 通常セクション: 社員さん+アルバイトさんを1:1合算(自己評価は含めない)
+    else{
       if(staffAvg!==null&&partAvg!==null)avg=(staffAvg+partAvg)/2;
       else if(staffAvg!==null)avg=staffAvg;
       else if(partAvg!==null)avg=partAvg;
     }
-    return{id:sec.id,label:sec.name,color:sec.color||'#f8fafc',score:avg,count:staffVals.length+partVals.length+adminVals.length};
+    return{id:sec.id,label:sec.name,color:sec.color||'#f8fafc',score:avg,count:selfVals.length+staffVals.length+partVals.length+adminVals.length};
   });
 
-  // セクション6個で完結 (旧仕様の追加バイト評価軸は不要)
-
+  // 総合平均: 全セクションの軸スコアの平均(0スコアは除外)
+  const validAxisScores=axes.map(a=>a.score).filter(v=>v>0);
+  const totalAvg=validAxisScores.length?validAxisScores.reduce((a,b)=>a+b,0)/validAxisScores.length:0;
+  // 後方互換のためstaffOverall/partOverallも残す(他で使ってる)
   const staffOverallAvgs=staffEvals.map(e=>Number(e.average_score||0)).filter(v=>v>0);
   const partOverallAvgs=partEvals.map(e=>Number(e.average_score||0)).filter(v=>v>0);
   const staffOverall=staffOverallAvgs.length?staffOverallAvgs.reduce((a,b)=>a+b,0)/staffOverallAvgs.length:null;
   const partOverall=partOverallAvgs.length?partOverallAvgs.reduce((a,b)=>a+b,0)/partOverallAvgs.length:null;
-  let totalAvg=0;
-  if(staffOverall!==null&&partOverall!==null)totalAvg=(staffOverall+partOverall)/2;
-  else if(staffOverall!==null)totalAvg=staffOverall;
-  else if(partOverall!==null)totalAvg=partOverall;
 
   const traitRows=S.evalTraits.filter(t=>evalIds.includes(t.evaluation_id));
   const traitScore=traitRows.reduce((s,t)=>s+Number(t.score||0),0);
@@ -234,7 +241,7 @@ function computeStaffRadar(staffId,periodId){
   const qualScore=quals.reduce((s,q)=>s+Number(q.score||0),0);
   const totalTraitScore=traitScore+abilityScore+qualScore;
 
-  return{axes,totalAvg,traitScore:totalTraitScore,qualifications:quals,evalCount:evals.length,allEvalCount:allEvals.length,staffOverall,partOverall};
+  return{axes,totalAvg,traitScore:totalTraitScore,qualifications:quals,evalCount:allEvals.filter(e=>e.evaluation_type!=='self').length,allEvalCount:allEvals.length,staffOverall,partOverall};
 }
 
 // SVGレーダーチャート描画
@@ -1007,12 +1014,13 @@ function renderRadarCards(){
         <div style="padding:10px 8px;background:#fff;flex:1">
           ${renderRadarSvg(axisLabels,[{axes:d.axes,color:d.color,thickness:3}],280)}
           <div style="margin-top:4px;font-size:9px;color:#64748b;text-align:center;font-weight:700">${(()=>{
-            const cnts={self:0,staff:0,parttime:0};
+            const cnts={self:0,staff:0,parttime:0,admin:0};
             S.evals.filter(e=>e.target_staff_id===d.member.id&&(!S.periodId||e.period_id===S.periodId)).forEach(e=>cnts[e.evaluation_type]=(cnts[e.evaluation_type]||0)+1);
             const parts=[];
+            if(cnts.self)parts.push(`自己${cnts.self}件`);
             if(cnts.staff)parts.push(`社員さん${cnts.staff}件`);
             if(cnts.parttime)parts.push(`アルバイトさん${cnts.parttime}件`);
-            if(cnts.self)parts.push(`<span style="color:#94a3b8">(自己${cnts.self}件は参考)</span>`);
+            if(cnts.admin)parts.push(`本部${cnts.admin}件`);
             return(parts.join(' / ')||'評価なし')+(d.traitScore!==0?` / 補正${d.traitScore>=0?'+':''}${d.traitScore}`:'');
           })()}</div>
         </div>
@@ -1047,9 +1055,10 @@ function renderRadarCards(){
             if(myAllEvals.length===0)return`<div style="color:#94a3b8;font-size:11px;padding:10px;text-align:center">評価データがありません</div>`;
 
             const groups=[
-              {type:'self',label:'🧑 自己評価',bg:'#f1f5f9',border:'#94a3b8',refTag:true},
+              {type:'self',label:'🧑 自己評価',bg:'#f1f5f9',border:'#94a3b8',refTag:false},
               {type:'staff',label:'👥 社員さん評価',bg:'#dbeafe',border:'#2563eb',refTag:false},
               {type:'parttime',label:'🎓 アルバイトさん評価',bg:'#fef3c7',border:'#d97706',refTag:false},
+              {type:'admin',label:'🏢 本部採点',bg:'#fed7aa',border:'#c2410c',refTag:false},
             ];
 
             let out='';
@@ -1157,9 +1166,12 @@ function renderRadarCards(){
       <span style="margin:0 4px;color:#d97706;font-weight:900">B (2.0+)</span>
       <span style="margin:0 4px;color:#dc2626;font-weight:900">C (1.0+)</span>
       <br>
-      <strong style="color:#0f172a">⚖️ 総合スコア計算:</strong>
-      <span style="margin:0 6px">社員さん評価の平均 と アルバイトさん評価の平均 を 1:1 で合算 + 特殊能力補正</span>
-      <span style="color:#94a3b8">※自己評価は集計対象外(参考資料として表示のみ)</span>
+      <strong style="color:#0f172a">⚖️ 各セクションの計算方法:</strong>
+      <br>
+      <span style="margin:0 6px">・🧑 個人評価軸 → <strong>自己評価のみ</strong></span><br>
+      <span style="margin:0 6px">・👥🎓 社員さん/アルバイトさん評価軸 → <strong>社員さん評価とアルバイトさん評価を1:1で合算</strong></span><br>
+      <span style="margin:0 6px">・🏢 店舗実績軸 → <strong>本部採点のみ</strong></span><br>
+      <span style="margin:0 6px;color:#475569">※特殊能力・資格による補正点が加算されます</span>
     </div>`);
   }
 
