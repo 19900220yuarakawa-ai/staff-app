@@ -106,10 +106,14 @@ const params=new URLSearchParams(location.search);
 // 評価モード判定:
 // ?staff   = 社員さん用 (個人評価 + 他社員さんを一括評価)
 // ?parttime = アルバイトさん用 (社員さんを一括評価)
+// ?parttime&store=xxx = その店舗のスタッフだけを評価対象に絞る
 // (パラメータなし) = 管理画面
 if(params.has('staff'))S.mode='staff';
 else if(params.has('parttime'))S.mode='parttime';
 else if(params.has('self'))S.mode='staff'; // 旧URL互換: ?self は ?staff に統合
+
+// URL の ?store= パラメータ(店舗ID)を取得 (アルバイトさんアンケートでの絞り込み用)
+S.urlStoreId=params.get('store')||'';
 
 // 評価ステップ管理
 // staff: 'who' (誰か選択) → 'self' (個人評価) → 'others' (他評価) → 'done'
@@ -761,6 +765,13 @@ function copyUrl(param){
   const url=location.origin+location.pathname+'?'+param;
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>showToast(url));
+  }else{showToast(url);}
+}
+
+function copyStoreUrl(storeId){
+  const url=location.origin+location.pathname+'?parttime&store='+storeId;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(()=>showToast('店舗別URLをコピーしました！')).catch(()=>showToast(url));
   }else{showToast(url);}
 }
 
@@ -1597,13 +1608,20 @@ function renderStepOthers(){
     items=S.items.filter(i=>i.for_parttime&&i.is_active!==false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   }
 
-  // 評価対象スタッフ(社員モード=割当て or 本人除く全員、バイトモード=全社員さん)
+  // 評価対象スタッフ(社員モード=割当て or 本人除く全員、バイトモード=全社員さん or 指定店舗のみ)
   let targets;
   if(type==='staff'){
     targets=getTargetsForReviewer(S.reviewerStaffId);
   }else{
     // バイト: 全スタッフを対象 (役職に関係なく、登録されてる人を評価)
     targets=S.staff.filter(s=>s.is_active!==false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    // ?store=xxx 指定があれば、その店舗に所属するスタッフだけに絞る
+    if(S.urlStoreId){
+      const allowedStaffIds=new Set(
+        S.staffStores.filter(ss=>ss.store_id===S.urlStoreId).map(ss=>ss.staff_id)
+      );
+      targets=targets.filter(s=>allowedStaffIds.has(s.id));
+    }
   }
 
   // セクション分類
@@ -1626,17 +1644,35 @@ function renderStepOthers(){
 
   const sg=evalScaleGuide();
   const stepNum=type==='staff'?'3/3':'1/1';
+  // バイトモードで店舗指定がある場合、店舗名を取得
+  const targetStore=(type==='parttime'&&S.urlStoreId)?S.stores.find(s=>s.id===S.urlStoreId):null;
   const titleMap={
     staff:'👥 他の社員さんの評価',
-    parttime:'🎓 社員さんの評価(アルバイトさんから)'
+    parttime:targetStore?`🎓 ${targetStore.name} の社員さん評価`:'🎓 社員さんの評価(アルバイトさんから)'
   };
   const bgMap={staff:'#fce7f3',parttime:'#dcfce7'};
+
+  // 評価対象が0人の場合 (店舗指定したが該当者なし)
+  if(targets.length===0){
+    document.getElementById('app').innerHTML=`
+      <div class="card" style="max-width:480px;margin:40px auto">
+        <div class="card-header" style="background:${bgMap[type]}">
+          <div style="font-size:18px;font-weight:900;color:#0f172a">${titleMap[type]}</div>
+        </div>
+        <div style="padding:30px 20px;text-align:center">
+          <div style="font-size:50px;margin-bottom:10px">⚠️</div>
+          <div style="font-size:16px;font-weight:900;margin-bottom:8px">評価対象の社員さんがいません</div>
+          ${targetStore?`<div style="font-size:13px;color:#64748b;font-weight:700;line-height:1.6">「${targetStore.name}」に紐付けられた社員さんがまだいません。<br>管理画面で「店舗・スタッフ管理」から所属店舗の設定をしてください。</div>`:`<div style="font-size:13px;color:#64748b;font-weight:700">先に管理画面でスタッフを登録してください</div>`}
+        </div>
+      </div>`;
+    return;
+  }
 
   let html=`<div style="max-width:760px;margin:0 auto"><div class="card">
     <div class="card-header" style="background:${bgMap[type]}">
       <div>
         <div style="font-size:20px;font-weight:900;color:#0f172a">${titleMap[type]}</div>
-        <div style="font-size:11px;font-weight:700;color:#475569;margin-top:3px">ステップ ${stepNum}: ${targets.length}人を一画面で評価できます</div>
+        <div style="font-size:11px;font-weight:700;color:#475569;margin-top:3px">ステップ ${stepNum}: ${targets.length}人を一画面で評価できます${targetStore?` (🏢 ${targetStore.name} の社員さんのみ)`:''}</div>
       </div>
     </div>
     <div style="padding:14px">
@@ -1743,7 +1779,16 @@ async function submitAllSteps(){
 
   let targets;
   if(type==='staff')targets=getTargetsForReviewer(S.reviewerStaffId);
-  else targets=S.staff.filter(s=>s.is_active!==false);
+  else{
+    targets=S.staff.filter(s=>s.is_active!==false);
+    // ?store=xxx 指定があれば、その店舗に所属するスタッフだけに絞る
+    if(S.urlStoreId){
+      const allowedStaffIds=new Set(
+        S.staffStores.filter(ss=>ss.store_id===S.urlStoreId).map(ss=>ss.staff_id)
+      );
+      targets=targets.filter(s=>allowedStaffIds.has(s.id));
+    }
+  }
 
   // 個人評価項目の回答(社員モードのみ)
   let selfFilled=[];
@@ -1915,33 +1960,71 @@ function renderAdmin(){
 
 
   if(S.tab==='guide'){
+    const sortedStores=[...S.stores].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
     html+=`<div class="card">
       <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
         <span>🔗 回答用URLの案内</span>
         ${helpToggleButton('guide')}
       </div>
       <div style="padding:12px">
-        ${helpBlock('guide',`<div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:14px">下記の<strong>2種類のURL</strong>を配布してください</div>`)}
-        ${[
-          {param:'staff',title:'👥 社員さん用アンケート',desc:'① 自分の評価(4問) → ② 他の社員さん全員を評価(料理・接客・チーム力)',color:'#be185d',bg:'linear-gradient(135deg,#fce7f3,#fbcfe8)'},
-          {param:'parttime',title:'🎓 アルバイトさん用アンケート',desc:'社員さん全員を評価(働く姿勢・チーム力) ※完全匿名',color:'#15803d',bg:'linear-gradient(135deg,#dcfce7,#bbf7d0)'},
-        ].map(l=>`<div class="link-box" style="background:${l.bg}">
-          <div style="font-size:14px;font-weight:900;color:${l.color};margin-bottom:4px">${l.title}</div>
-          <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:8px;line-height:1.5">${l.desc}</div>
+        ${helpBlock('guide',`<div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:14px">下記のURLを配布してください</div>`)}
+
+        <!-- 社員さん用URL -->
+        <div class="link-box" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)">
+          <div style="font-size:14px;font-weight:900;color:#be185d;margin-bottom:4px">👥 社員さん用アンケート</div>
+          <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:8px;line-height:1.5">① 自分の評価(4問) → ② 他の社員さん全員を評価(料理・接客・チーム力)</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <div class="url">${origin}?${l.param}</div>
-            <button class="btn btn-primary btn-sm" onclick="copyUrl('${l.param}')">📋 コピー</button>
+            <div class="url">${origin}?staff</div>
+            <button class="btn btn-primary btn-sm" onclick="copyUrl('staff')">📋 コピー</button>
           </div>
-        </div>`).join('')}
+        </div>
+
+        <!-- アルバイトさん用URL: 全社員さん向け -->
+        <div class="link-box" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0)">
+          <div style="font-size:14px;font-weight:900;color:#15803d;margin-bottom:4px">🎓 アルバイトさん用アンケート (全社員さん対象)</div>
+          <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:8px;line-height:1.5">登録されている社員さん全員を評価(働く姿勢・チーム力) ※完全匿名</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div class="url">${origin}?parttime</div>
+            <button class="btn btn-primary btn-sm" onclick="copyUrl('parttime')">📋 コピー</button>
+          </div>
+        </div>
+
+        <!-- 店舗別アルバイトさん用URL -->
+        ${sortedStores.length>0?`<div style="border:2.5px solid #15803d;border-radius:14px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:12px;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:900;color:#15803d;margin-bottom:4px">🏢 店舗別 アルバイトさん用アンケート</div>
+          <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:10px;line-height:1.5">
+            その店舗に所属する社員さんだけを評価対象にできます。<br>
+            例: 銀座店のアルバイトさんへは「銀座店」のURLを送れば、銀座店の社員さんだけが評価対象に表示されます。
+          </div>
+          ${sortedStores.map(st=>{
+            const memberCount=S.staffStores.filter(ss=>ss.store_id===st.id).length;
+            const url=`${origin}?parttime&store=${st.id}`;
+            return`<div style="background:#fff;border:2px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:8px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="background:${st.color||'#e0f2fe'};border:1.5px solid #1e293b;border-radius:6px;padding:3px 10px;font-size:13px;font-weight:900;color:#0f172a">🏢 ${st.name}</span>
+                  <span style="font-size:11px;font-weight:700;color:${memberCount>0?'#15803d':'#dc2626'}">${memberCount>0?`✅ ${memberCount}人`:'⚠️ 紐付けスタッフなし'}</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <div class="url" style="font-size:10px">${url}</div>
+                <button class="btn btn-primary btn-sm" onclick="copyStoreUrl('${st.id}')">📋 コピー</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`:''}
+
         ${helpBlock('guide',`<div style="background:#fef9c3;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-top:14px">
           <div style="font-size:11px;font-weight:700;color:#475569;line-height:1.7">
             💡 <strong>使い方の流れ</strong><br>
             ① 「🏢👥 店舗・スタッフ管理」タブで店舗とスタッフを登録<br>
-            ② 「📝 評価項目」タブで質問を確認(編集も可)<br>
-            ③ 上記の<strong>2つのURL</strong>を配布<br>
+            ② スタッフに所属店舗を紐付け<br>
+            ③ 「📝 評価項目」タブで質問を確認(編集も可)<br>
+            ④ URLを配布<br>
             　・社員さんへ → <strong>?staff URL</strong>(自分の個人評価+他の社員さんを評価)<br>
-            　・アルバイトさんへ → <strong>?parttime URL</strong>(社員さん全員を評価)<br>
-            ④ 「📊 集計」で結果を確認 → 名刺カードクリックで詳細表示<br><br>
+            　・全社員さんを評価してもらう場合 → <strong>?parttime URL</strong><br>
+            　・店舗ごとに分けたい場合 → <strong>店舗別 ?parttime&store= URL</strong><br>
+            ⑤ 「📊 集計」で結果を確認 → 名刺カードクリックで詳細表示<br><br>
             🔒 <strong>匿名性について</strong><br>
             「誰が誰を評価したか」はSupabaseに保存されず、管理画面からも分かりません。安心して正直に採点してもらえます。
           </div>
