@@ -1069,97 +1069,120 @@ function renderRadarCards(){
           </div>`:''}
         </div>`:''}
 
-        <!-- 展開エリア: タイプ別に平均したカード -->
+        <!-- 展開エリア: 軸ごとにグループ化 -->
         ${isOpen?`<div style="border-top:2.5px solid #1e293b;background:#fef9c3;padding:12px 14px" onclick="event.stopPropagation()">
           <div style="font-size:12px;font-weight:900;color:#0f172a;margin-bottom:8px">📋 ${d.member.name} の評価詳細 (全${myAllEvals.length}件)</div>
           ${(()=>{
             if(myAllEvals.length===0)return`<div style="color:#94a3b8;font-size:11px;padding:10px;text-align:center">評価データがありません</div>`;
 
-            const groups=[
-              {type:'self',label:'🧑 自己評価',bg:'#f1f5f9',border:'#94a3b8',refTag:false},
-              {type:'staff',label:'👥 社員さん評価',bg:'#dbeafe',border:'#2563eb',refTag:false},
-              {type:'parttime',label:'🎓 アルバイトさん評価',bg:'#fef3c7',border:'#d97706',refTag:false},
-              {type:'admin',label:'🏢 本部採点',bg:'#fed7aa',border:'#c2410c',refTag:false},
+            const sortedSec=[...S.sections].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+            const evaluatorTypes=[
+              {type:'self',label:'🧑 自己評価',bg:'#f1f5f9',border:'#94a3b8',itemKey:'for_self'},
+              {type:'staff',label:'👥 社員さん',bg:'#dbeafe',border:'#2563eb',itemKey:'for_staff'},
+              {type:'parttime',label:'🎓 アルバイトさん',bg:'#fef3c7',border:'#d97706',itemKey:'for_parttime'},
+              {type:'admin',label:'🏢 本部採点',bg:'#fed7aa',border:'#c2410c',itemKey:null},
             ];
 
+            // axesから軸スコアを取得
+            const axisScoreMap={};
+            d.axes.forEach(a=>{axisScoreMap[a.id]=a.score;});
+
             let out='';
-            groups.forEach(g=>{
-              const typeEvals=myAllEvals.filter(e=>e.evaluation_type===g.type);
-              if(typeEvals.length===0)return;
 
-              const typeEvalIds=typeEvals.map(e=>e.id);
-              const typeScores=S.scores.filter(s=>typeEvalIds.includes(s.evaluation_id));
-              const itemAvg={};
-              S.items.forEach(it=>{
-                const vals=typeScores.filter(s=>(s.item_id||s.item_key)===it.id&&s.score>0).map(s=>s.score);
-                if(vals.length>0)itemAvg[it.id]=vals.reduce((a,b)=>a+b,0)/vals.length;
+            // ====== 軸ごとに表示 ======
+            sortedSec.forEach((sec,secIdx)=>{
+              const secItems=S.items.filter(i=>i.section_id===sec.id&&i.is_active!==false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+              if(secItems.length===0)return;
+              const secItemIds=new Set(secItems.map(i=>i.id));
+
+              const axisAvg=axisScoreMap[sec.id]||0; // 軸の平均(0-5)
+              const axisTotal=axisAvg*4; // 軸の合計点(0-20)
+              const axisRank=axisAvg>=4.5?'SS':axisAvg>=4?'S':axisAvg>=3.5?'A+':axisAvg>=3?'A':axisAvg>=2.5?'B+':axisAvg>=2?'B':axisAvg>0?'C':'—';
+
+              // この軸を評価できるタイプを抽出
+              const relevantTypes=evaluatorTypes.filter(et=>{
+                if(et.type==='admin')return sec.evaluator==='admin';
+                if(sec.evaluator==='admin')return false;
+                if(et.itemKey)return secItems.some(i=>i[et.itemKey]===true);
+                return false;
               });
 
-              const avgs=typeEvals.map(e=>Number(e.average_score||0)).filter(v=>v>0);
-              const overallAvg=avgs.length?avgs.reduce((a,b)=>a+b,0)/avgs.length:0;
-              const ovRank=overallAvg>=4.5?'SS':overallAvg>=4?'S':overallAvg>=3.5?'A+':overallAvg>=3?'A':overallAvg>=2.5?'B+':overallAvg>=2?'B':overallAvg>0?'C':'—';
+              // 軸ヘッダー(合計点を大きく表示)
+              out+=`<div style="background:#fff;border:2px solid #1e293b;border-radius:10px;padding:8px 10px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;background:${sec.color||'#f8fafc'};border:1.5px solid #1e293b;border-radius:6px;padding:6px 10px">
+                  <span style="background:#1e293b;color:#fde047;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;font-size:10px;font-weight:900;flex:none">${secIdx+1}</span>
+                  <span style="font-size:13px;font-weight:900;color:#0f172a;flex:1">${sec.name}</span>
+                  <span style="font-size:11px;font-weight:700;color:#475569">平均 ${axisAvg>0?axisAvg.toFixed(2):'—'}</span>
+                  <span style="background:#1e293b;color:#fde047;font-size:9px;font-weight:900;padding:2px 7px;border-radius:999px">${axisRank}</span>
+                  <span style="background:#fde047;border:2px solid #1e293b;border-radius:6px;padding:2px 9px;font-size:13px;font-weight:900;color:#0f172a">${axisTotal>0?axisTotal.toFixed(1):'—'}<span style="font-size:9px;color:#64748b">/20</span></span>
+                </div>`;
 
-              const traitAll=S.evalTraits.filter(t=>typeEvalIds.includes(t.evaluation_id));
-              const traitMap={};
-              traitAll.forEach(t=>{
-                if(!traitMap[t.trait_name])traitMap[t.trait_name]={sum:0,count:0};
-                traitMap[t.trait_name].sum+=Number(t.score||0);
-                traitMap[t.trait_name].count++;
-              });
-              const traitList=Object.entries(traitMap).map(([name,v])=>({name,score:v.sum/v.count}));
+              // 各評価者タイプの内訳
+              relevantTypes.forEach(et=>{
+                const typeEvals=myAllEvals.filter(e=>e.evaluation_type===et.type);
+                if(typeEvals.length===0)return;
+                const typeEvalIds=new Set(typeEvals.map(e=>e.id));
+                // この軸×このタイプのスコア
+                const itemAvg={};
+                S.scores.filter(s=>typeEvalIds.has(s.evaluation_id)).forEach(s=>{
+                  const k=s.item_id||s.item_key;
+                  if(secItemIds.has(k)&&s.score>0){
+                    if(!itemAvg[k]){itemAvg[k]={sum:0,count:0};}
+                    itemAvg[k].sum+=s.score;
+                    itemAvg[k].count++;
+                  }
+                });
 
-              const sortedSec=[...S.sections].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
-              // タイプ別フィルタ: そのタイプが評価する項目だけを表示
-              const typeKey=g.type==='self'?'for_self':g.type==='staff'?'for_staff':g.type==='parttime'?'for_parttime':'';
-              let itemHtml='';
-              sortedSec.forEach(sec=>{
-                // そのタイプが評価する項目だけに絞る
-                const secItems=S.items.filter(i=>i.section_id===sec.id && (typeKey?i[typeKey]===true:true)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
-                if(secItems.length===0)return; // 関係ないセクションは丸ごとスキップ
-                const rows=secItems.map(it=>{
-                  const v=itemAvg[it.id];
-                  if(!v||v<=0)return'';
+                let rowsHtml='';
+                secItems.forEach(it=>{
+                  if(et.itemKey&&!it[et.itemKey])return;
+                  const data=itemAvg[it.id];
+                  if(!data||data.count===0)return;
+                  const v=data.sum/data.count;
                   const rounded=Math.round(v);
                   const dots=Array.from({length:5},(_,i)=>`<span style="color:${i<rounded?'#dc2626':'#e2e8f0'};font-size:9px">●</span>`).join('');
-                  return`<div style="display:flex;align-items:center;gap:5px;padding:1px 5px;font-size:10px;background:#fafbfc;border-radius:3px;margin-bottom:1px">
+                  rowsHtml+=`<div style="display:flex;align-items:center;gap:5px;padding:2px 6px;font-size:10px;background:#fafbfc;border-radius:3px;margin-bottom:1px">
                     <span style="flex:1;color:#0f172a;font-weight:700">${it.label}</span>
                     <span style="flex:none;font-family:monospace;letter-spacing:1px">${dots}</span>
                     <span style="flex:none;font-weight:900;color:#1e293b;min-width:26px;text-align:right">${v.toFixed(1)}</span>
                   </div>`;
-                }).join('');
-                if(rows){
-                  itemHtml+=`<div style="margin-bottom:4px">
-                    <div style="display:inline-flex;align-items:center;gap:4px;margin-bottom:2px;flex-wrap:wrap">
-                      <span style="font-size:9px;font-weight:900;background:${sec.color||'#f8fafc'};border:1.5px solid #1e293b;border-radius:4px;padding:1px 6px;display:inline-block">${sec.name}</span>
+                });
+
+                if(rowsHtml){
+                  out+=`<div style="margin-bottom:4px;padding:5px 6px;border-left:3px solid ${et.border};background:${et.bg}40">
+                    <div style="display:inline-flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap">
+                      <span style="background:${et.bg};border:1.5px solid ${et.border};border-radius:4px;padding:1px 6px;font-size:9px;font-weight:900;color:#0f172a">${et.label}</span>
+                      <span style="font-size:9px;color:#64748b;font-weight:700">${typeEvals.length}件を平均</span>
                     </div>
-                    ${rows}
+                    ${rowsHtml}
                   </div>`;
                 }
               });
 
-              out+=`<div style="background:#fff;border:1.5px solid ${g.border};border-radius:8px;padding:8px 10px;margin-bottom:6px">
-                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:6px">
-                  <span style="background:${g.bg};border:1.5px solid ${g.border};border-radius:5px;padding:1px 6px;font-size:10px;font-weight:900;color:#0f172a">${g.label}</span>
-                  ${g.refTag?`<span style="background:#e2e8f0;color:#475569;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:900">参考</span>`:''}
-                  <span style="font-size:10px;font-weight:900;color:#0f172a">平均 ${overallAvg.toFixed(2)}</span>
-                  <span style="background:#1e293b;color:#fde047;font-size:9px;font-weight:900;padding:1px 6px;border-radius:999px">${ovRank}</span>
-                  <span style="font-size:9px;color:#64748b;margin-left:auto">${typeEvals.length}件を平均</span>
-                </div>
-                ${itemHtml}
-                ${traitList.length>0?`<div style="margin-top:5px;padding-top:5px;border-top:1px dashed #cbd5e1">
-                  <div style="font-size:9px;font-weight:900;color:#475569;margin-bottom:2px">⭐ 選ばれた特殊能力</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:3px">
-                    ${traitList.map(t=>{
-                      const sc=t.score;
-                      const c=sc>0?'#15803d':sc<0?'#dc2626':'#475569';
-                      const bg=sc>0?'#dcfce7':sc<0?'#fee2e2':'#f1f5f9';
-                      const display=Number.isInteger(sc)?sc.toFixed(0):sc.toFixed(1);
-                      return`<span style="display:inline-flex;align-items:center;gap:2px;font-size:9px;font-weight:900;border:1.5px solid ${c};background:${bg};color:${c};border-radius:4px;padding:1px 6px">${t.name} ${sc>0?'+':''}${display}</span>`;
-                    }).join('')}
-                  </div>
-                </div>`:''}
-              </div>`;
+              out+=`</div>`;
             });
+
+            // ====== 合計点の内訳サマリー ======
+            const axisTotals=sortedSec.map(s=>({name:s.name,total:(axisScoreMap[s.id]||0)*4}));
+            const sumOfAxes=axisTotals.reduce((a,b)=>a+b.total,0);
+            const finalScore=Math.max(0,Math.round((sumOfAxes+d.traitScore)*10)/10);
+            const fRank=rankFromTotalScore(finalScore);
+
+            out+=`<div style="background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;border-radius:12px;padding:12px 14px;margin-top:12px;box-shadow:0 4px 0 #475569">
+              <div style="font-size:11px;font-weight:900;color:#fde047;margin-bottom:8px">📊 合計点の計算式</div>
+              <div style="background:#fff;color:#0f172a;border-radius:8px;padding:10px;font-size:11px;font-weight:700;line-height:1.7">
+                ${axisTotals.map(a=>`<div style="display:flex;justify-content:space-between"><span>${a.name}</span><span>${a.total>0?a.total.toFixed(1):'0.0'}<span style="color:#94a3b8;font-size:10px">/20</span></span></div>`).join('')}
+                <div style="border-top:1.5px dashed #cbd5e1;margin:6px 0;padding-top:6px;display:flex;justify-content:space-between;font-weight:900">
+                  <span>6軸の合計</span><span>${sumOfAxes.toFixed(1)}<span style="color:#94a3b8;font-size:10px">/120</span></span>
+                </div>
+                ${d.traitScore!==0?`<div style="display:flex;justify-content:space-between;color:${d.traitScore>0?'#15803d':'#dc2626'}"><span>能力・資格 補正</span><span>${d.traitScore>=0?'+':''}${d.traitScore}</span></div>`:''}
+                <div style="border-top:2.5px solid #1e293b;margin:6px 0;padding-top:6px;display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-size:13px;font-weight:900">総合スコア</span>
+                  <span style="font-size:18px;font-weight:900;color:${fRank.color}">${finalScore}<span style="font-size:11px;color:#94a3b8">/120</span> <span style="background:#1e293b;color:#fde047;font-size:11px;font-weight:900;padding:2px 10px;border-radius:999px;margin-left:4px">${fRank.rank}</span></span>
+                </div>
+              </div>
+            </div>`;
+
             return out;
           })()}
         </div>`:''}
