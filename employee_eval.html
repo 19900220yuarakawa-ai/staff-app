@@ -668,15 +668,31 @@ async function clearAssign(reviewerId){
 }
 
 async function toggleStaffQualification(staffId,qualId){
+  console.log('toggleStaffQualification:', {staffId, qualId});
   const existing=S.staffQualifications.find(x=>x.staff_id===staffId&&x.qualification_id===qualId);
+
+  // 楽観的UI更新
+  if(existing){
+    S.staffQualifications=S.staffQualifications.filter(x=>x.id!==existing.id);
+  }else{
+    S.staffQualifications=[...S.staffQualifications,{id:'tmp_'+Date.now(),staff_id:staffId,qualification_id:qualId}];
+  }
+  render();
+
   try{
     if(existing){
-      await sb.from('employee_staff_qualifications').delete().eq('id',existing.id);
+      const r=await sb.from('employee_staff_qualifications').delete().eq('id',existing.id);
+      if(r.error)throw r.error;
     }else{
-      await sb.from('employee_staff_qualifications').insert({staff_id:staffId,qualification_id:qualId});
+      const r=await sb.from('employee_staff_qualifications').insert({staff_id:staffId,qualification_id:qualId});
+      if(r.error)throw r.error;
     }
     await loadAll();
-  }catch(e){showToast('更新エラー: '+e.message,true);}
+  }catch(e){
+    console.error('toggleStaffQualification error:',e);
+    showToast('更新エラー: '+e.message,true);
+    await loadAll();
+  }
 }
 
 // 店舗マスター管理
@@ -704,15 +720,35 @@ async function delStore(id){
 }
 // スタッフと店舗の紐付け
 async function toggleStaffStore(staffId,storeId){
+  console.log('toggleStaffStore called:', {staffId, storeId});
   const existing=S.staffStores.find(x=>x.staff_id===staffId&&x.store_id===storeId);
+  console.log('existing:', existing);
+
+  // 楽観的UI更新: 即座に画面に反映
+  if(existing){
+    S.staffStores=S.staffStores.filter(x=>x.id!==existing.id);
+  }else{
+    S.staffStores=[...S.staffStores,{id:'tmp_'+Date.now(),staff_id:staffId,store_id:storeId}];
+  }
+  render();
+
   try{
     if(existing){
-      await sb.from('employee_staff_stores').delete().eq('id',existing.id);
+      const r=await sb.from('employee_staff_stores').delete().eq('id',existing.id);
+      console.log('delete result:', r);
+      if(r.error)throw r.error;
     }else{
-      await sb.from('employee_staff_stores').insert({staff_id:staffId,store_id:storeId});
+      const r=await sb.from('employee_staff_stores').insert({staff_id:staffId,store_id:storeId});
+      console.log('insert result:', r);
+      if(r.error)throw r.error;
     }
     await loadAll();
-  }catch(e){showToast('更新エラー: '+e.message,true);}
+    showToast(existing?'解除しました':'紐付けました');
+  }catch(e){
+    console.error('toggleStaffStore error:',e);
+    showToast('更新エラー: '+e.message,true);
+    await loadAll();
+  }
 }
 // スタッフの所属店舗を取得
 function getStaffStores(staffId){
