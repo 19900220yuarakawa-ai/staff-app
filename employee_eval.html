@@ -94,6 +94,7 @@ let S={
   newStaff:{name:'',position:'',note:''},
   newQualification:{name:'',score:0},
   qualTargetStaffId:'',
+  partnoteStoreFilter:'', // 一言タブの店舗フィルタ
   // 店舗実績入力用
   storePerf:{storeId:'',values:{}}, // {storeId, values:{itemId:score}}
   newStore:{name:'',color:'#e0f2fe'},
@@ -2168,7 +2169,10 @@ async function doSubmitAllSteps(){
     if(type==='parttime'){
       const msg=(S.batchForm.message||'').trim();
       if(msg){
-        await sb.from('employee_partnotes').insert({message:msg});
+        await sb.from('employee_partnotes').insert({
+          message:msg,
+          store_id:S.urlStoreId||null
+        });
       }
     }
 
@@ -2625,28 +2629,57 @@ function renderAdmin(){
   }
 
   if(S.tab==='partnotes'){
-    const notes=S.partnotes||[];
+    const allNotes=S.partnotes||[];
+    // 店舗フィルタ
+    const filterStoreId=S.partnoteStoreFilter||'';
+    const notes=filterStoreId
+      ? (filterStoreId==='__none__'
+          ? allNotes.filter(n=>!n.store_id)
+          : allNotes.filter(n=>n.store_id===filterStoreId))
+      : allNotes;
+    // 店舗ごとの件数集計
+    const countByStore={};
+    let countNoStore=0;
+    allNotes.forEach(n=>{
+      if(n.store_id)countByStore[n.store_id]=(countByStore[n.store_id]||0)+1;
+      else countNoStore++;
+    });
+
     html+=`<div class="card">
       <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
-        <span>📝 アルバイトさんからの一言</span>
+        <span>📝 アルバイトさんからの一言 (${notes.length}件${filterStoreId?`/全${allNotes.length}件`:''})</span>
         ${helpToggleButton('partnotes')}
       </div>
       <div style="padding:12px">
         ${helpBlock('partnotes',`<div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11px;font-weight:700;color:#713f12;line-height:1.6">
           💡 アルバイトさんアンケート(?parttime)の最後に「気になったこと」欄があり、ここにそのコメントが匿名で集まります。<br>
-          🔒 誰が書いたかは記録されないため、安心して本音を書いてもらえます。
+          🔒 誰が書いたかは記録されないため、安心して本音を書いてもらえます。<br>
+          🏢 店舗別URL(?parttime&store=xxx)で送られた場合、どの店舗からのコメントか分かります。
         </div>`)}
 
-        ${notes.length===0?`<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:10px;padding:30px 20px;text-align:center;color:#94a3b8;font-size:13px;font-weight:700">まだコメントが届いていません</div>`:notes.map((n,idx)=>`<div style="border:2px solid #f59e0b;background:#fffbeb;border-radius:12px;padding:12px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-            <div style="font-size:11px;font-weight:900;color:#9a3412">📝 一言 #${notes.length-idx} (匿名)</div>
-            <div style="font-size:10px;font-weight:700;color:#94a3b8">${new Date(n.created_at).toLocaleString('ja-JP')}</div>
-          </div>
-          <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.6;white-space:pre-wrap">${(n.message||'').replace(/</g,'&lt;')}</div>
-          <div style="text-align:right;margin-top:6px">
-            <button class="btn btn-xs btn-danger" onclick="delPartnote('${n.id}')">削除</button>
-          </div>
-        </div>`).join('')}
+        ${allNotes.length>0?`
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;border-bottom:1.5px dashed #cbd5e1;padding-bottom:10px">
+          <button onclick="S.partnoteStoreFilter='';render()" style="border:2px solid ${!filterStoreId?'#1e293b':'#cbd5e1'};background:${!filterStoreId?'#fde047':'#fff'};color:#0f172a;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;${!filterStoreId?'box-shadow:0 2px 0 #1e293b':''}">📋 すべて (${allNotes.length})</button>
+          ${S.stores.filter(s=>countByStore[s.id]).map(s=>`<button onclick="S.partnoteStoreFilter='${s.id}';render()" style="border:2px solid ${filterStoreId===s.id?'#1e293b':'#cbd5e1'};background:${filterStoreId===s.id?(s.color||'#e0f2fe'):'#fff'};color:#0f172a;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;${filterStoreId===s.id?'box-shadow:0 2px 0 #1e293b':''}">🏢 ${s.name} (${countByStore[s.id]})</button>`).join('')}
+          ${countNoStore>0?`<button onclick="S.partnoteStoreFilter='__none__';render()" style="border:2px solid ${filterStoreId==='__none__'?'#1e293b':'#cbd5e1'};background:${filterStoreId==='__none__'?'#fff3c7':'#fff'};color:#475569;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;${filterStoreId==='__none__'?'box-shadow:0 2px 0 #1e293b':''}">❓ 店舗未指定 (${countNoStore})</button>`:''}
+        </div>`:''}
+
+        ${notes.length===0?`<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:10px;padding:30px 20px;text-align:center;color:#94a3b8;font-size:13px;font-weight:700">${allNotes.length===0?'まだコメントが届いていません':'この絞り込みに該当するコメントはありません'}</div>`:notes.map((n,idx)=>{
+          const noteStore=n.store_id?S.stores.find(s=>s.id===n.store_id):null;
+          return`<div style="border:2px solid #f59e0b;background:#fffbeb;border-radius:12px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <div style="font-size:11px;font-weight:900;color:#9a3412">📝 一言 #${notes.length-idx} (匿名)</div>
+                ${noteStore?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:900;background:${noteStore.color||'#e0f2fe'};border:1.5px solid #1e293b;border-radius:6px;padding:2px 8px;color:#0f172a">🏢 ${noteStore.name}</span>`:`<span style="font-size:10px;font-weight:700;color:#94a3b8">❓ 店舗未指定</span>`}
+              </div>
+              <div style="font-size:10px;font-weight:700;color:#94a3b8">${new Date(n.created_at).toLocaleString('ja-JP')}</div>
+            </div>
+            <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.6;white-space:pre-wrap">${(n.message||'').replace(/</g,'&lt;')}</div>
+            <div style="text-align:right;margin-top:6px">
+              <button class="btn btn-xs btn-danger" onclick="delPartnote('${n.id}')">削除</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
   }
