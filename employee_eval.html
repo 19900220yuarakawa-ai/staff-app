@@ -95,6 +95,8 @@ let S={
   newQualification:{name:'',score:0},
   qualTargetStaffId:'',
   partnoteStoreFilter:'', // 一言タブの店舗フィルタ
+  leaderItems:[], // 責任者資質の質問項目
+  leaderEvaluatorStoreFilter:'', // 責任者アンケート評価者選択の店舗フィルタ
   // 店舗実績入力用
   storePerf:{storeId:'',values:{}}, // {storeId, values:{itemId:score}}
   newStore:{name:'',color:'#e0f2fe'},
@@ -111,12 +113,15 @@ const params=new URLSearchParams(location.search);
 // ?parttime = アルバイトさん用 (社員さんを一括評価)
 // ?parttime&store=xxx = その店舗のスタッフだけを評価対象に絞る
 // (パラメータなし) = 管理画面
-if(params.has('staff'))S.mode='staff';
+if(params.has('leader'))S.mode='leader';
+else if(params.has('staff'))S.mode='staff';
 else if(params.has('parttime'))S.mode='parttime';
 else if(params.has('self'))S.mode='staff'; // 旧URL互換: ?self は ?staff に統合
 
 // URL の ?store= パラメータ(店舗ID)を取得 (アルバイトさんアンケートでの絞り込み用)
 S.urlStoreId=params.get('store')||'';
+// URL の ?pt= パラメータ(メインアルバイトさんID) - 責任者アンケート専用
+S.urlPartTimeId=params.get('pt')||'';
 
 // 評価ステップ管理
 // staff: 'who' (誰か選択) → 'self' (個人評価) → 'others' (他評価) → 'done'
@@ -341,7 +346,7 @@ function staffColor(idx){return STAFF_COLORS[idx%STAFF_COLORS.length];}
 async function loadAll(){
   S.loading=true;render();
   try{
-    const [storesR, staffR, staffStoresR, sectionsR, itemsR, traitOptR, qualR, staffQualR, abilitiesR, partnotesR, assignmentsR, evalsR, scoresR, evalTraitsR] = await Promise.all([
+    const [storesR, staffR, staffStoresR, sectionsR, itemsR, traitOptR, qualR, staffQualR, abilitiesR, partnotesR, assignmentsR, evalsR, scoresR, evalTraitsR, leaderItemsR] = await Promise.all([
       sb.from('employee_stores').select('*').eq('is_active',true).order('sort_order',{ascending:true}),
       sb.from('employee_eval_staff').select('*').eq('is_active',true).order('sort_order',{ascending:true}),
       sb.from('employee_staff_stores').select('*'),
@@ -356,6 +361,7 @@ async function loadAll(){
       sb.from('employee_evaluations').select('*').order('created_at',{ascending:false}),
       sb.from('employee_evaluation_scores').select('*'),
       sb.from('employee_evaluation_traits').select('*'),
+      sb.from('employee_leader_eval_items').select('*').eq('is_active',true).order('sort_order',{ascending:true}),
     ]);
     S.stores=storesR.data||[];
     S.staff=staffR.data||[];
@@ -371,6 +377,11 @@ async function loadAll(){
     S.staffQualifications=staffQualR.data||[];
     S.abilities=abilitiesR.data||[];
     S.partnotes=partnotesR.data||[];
+    // 責任者資質の質問項目
+    S.leaderItems=(leaderItemsR.data||[]).map(i=>({
+      ...i,
+      scaleLabels:Array.isArray(i.scale_labels)?i.scale_labels:(typeof i.scale_labels==='string'?JSON.parse(i.scale_labels||'[]'):[])
+    }));
     // assignments は {reviewerId: [targetIds]} 形に変換
     S.assignments={};
     (assignmentsR.data||[]).forEach(a=>{
@@ -755,6 +766,173 @@ async function delPartnote(id){
   }catch(e){showToast('削除エラー: '+e.message,true);}
 }
 
+// =====================================================================
+// 責任者アンケート設定 関連
+// =====================================================================
+// 責任者質問の追加
+async function addLeaderItem(){
+  const label=prompt('質問文を入力してください\n例: 部下や後輩に的確な指示が出せるか');
+  if(!label||!label.trim())return;
+  try{
+    const sortOrder=(S.leaderItems.length+1)*10;
+    await sb.from('employee_leader_eval_items').insert({label:label.trim(),sort_order:sortOrder});
+    showToast('質問を追加しました ✅');
+    await loadAll();
+  }catch(e){showToast('追加エラー: '+e.message,true);}
+}
+
+// 責任者質問の編集
+async function updateLeaderItemLabel(id,newLabel){
+  if(!newLabel||!newLabel.trim())return;
+  try{
+    await sb.from('employee_leader_eval_items').update({label:newLabel.trim()}).eq('id',id);
+    // メモリ反映(再描画なし - 入力中のキャレット維持)
+    const it=S.leaderItems.find(i=>i.id===id);
+    if(it)it.label=newLabel.trim();
+  }catch(e){showToast('保存エラー: '+e.message,true);}
+}
+
+// 責任者質問の削除
+async function delLeaderItem(id){
+  if(!confirm('この質問を削除しますか?'))return;
+  try{
+    await sb.from('employee_leader_eval_items').delete().eq('id',id);
+    showToast('削除しました');
+    await loadAll();
+  }catch(e){showToast('削除エラー: '+e.message,true);}
+}
+
+// 責任者選択肢ラベル編集
+async function finishLeaderScaleEdit(){
+  const itemId=S.scaleEditingItemId;
+  const it=S.leaderItems.find(i=>i.id===itemId);
+  if(!it){S.scaleEditingItemId='';render();return;}
+  let labels=Array.isArray(it.scaleLabels)?it.scaleLabels.slice():['','','','',''];
+  while(labels.length<5)labels.push('');
+  if(labels.length>5)labels=labels.slice(0,5);
+  try{
+    await sb.from('employee_leader_eval_items').update({scale_labels:labels}).eq('id',itemId);
+    S.scaleEditingItemId='';
+    showToast('選択肢を保存しました ✅');
+    await loadAll();
+  }catch(e){
+    showToast('保存エラー: '+e.message,true);
+    S.scaleEditingItemId='';
+    render();
+  }
+}
+
+// 責任者候補フラグ切替
+async function toggleLeaderCandidate(staffId){
+  const st=S.staff.find(s=>s.id===staffId);
+  if(!st)return;
+  const newFlag=!st.is_leader_candidate;
+  try{
+    await sb.from('employee_eval_staff').update({is_leader_candidate:newFlag}).eq('id',staffId);
+    st.is_leader_candidate=newFlag;
+    render();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+
+// メインアルバイト切替
+async function toggleMainParttime(staffId){
+  const st=S.staff.find(s=>s.id===staffId);
+  if(!st)return;
+  const newFlag=!st.is_main_parttime;
+  try{
+    await sb.from('employee_eval_staff').update({is_main_parttime:newFlag}).eq('id',staffId);
+    st.is_main_parttime=newFlag;
+    render();
+  }catch(e){showToast('更新エラー: '+e.message,true);}
+}
+
+// 責任者アンケートの送信
+async function submitLeaderEval(){
+  const candidates=S.staff.filter(s=>s.is_leader_candidate&&s.is_active!==false);
+  const items=S.leaderItems.filter(i=>i.is_active!==false);
+
+  let unfilledCount=0;
+  candidates.forEach(c=>{
+    items.forEach(i=>{
+      const v=(S.batchForm.values[c.id]||{})[i.id]||0;
+      if(v===0)unfilledCount++;
+    });
+  });
+
+  const completedCount=candidates.filter(c=>{
+    const myValues=S.batchForm.values[c.id]||{};
+    return items.some(i=>(myValues[i.id]||0)>0);
+  }).length;
+
+  // 確認モーダル
+  showLeaderConfirmModal({candidates,items,unfilledCount,completedCount});
+}
+
+function showLeaderConfirmModal({candidates,items,unfilledCount,completedCount}){
+  const modal=document.createElement('div');
+  modal.id='leader-confirm-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`
+    <div style="background:#fff;border:3px solid #1e293b;border-radius:16px;max-width:480px;width:100%;padding:18px;box-shadow:0 8px 0 #1e293b;max-height:90vh;overflow-y:auto">
+      <div style="font-size:18px;font-weight:900;color:#0f172a;margin-bottom:12px;text-align:center">👑 責任者資質アンケート 送信確認</div>
+      <div style="background:#fef3c7;border:2.5px solid #ca8a04;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:900;color:#713f12;margin-bottom:6px">🔒 完全匿名で送信されます</div>
+        <div style="font-size:12px;font-weight:700;color:#0f172a;line-height:1.6">誰が回答したかは記録されません。</div>
+      </div>
+      <div style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px;font-weight:700;color:#475569;line-height:1.6">
+        📋 送信内容:<br>
+        ・責任者候補の評価: <strong style="color:#0f172a">${completedCount}/${candidates.length}人</strong>分<br>
+        ${unfilledCount>0?`・未回答: <strong style="color:#dc2626">${unfilledCount}項目</strong>(送信時はスキップされます)`:'・<strong style="color:#15803d">すべて回答済み</strong> ✅'}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="lconfirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">◀ 戻って修正</button>
+        <button id="lconfirm-send" class="btn btn-primary" style="flex:2;padding:14px;font-size:14px;box-shadow:0 4px 0 #1e293b">📤 匿名で送信</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('lconfirm-cancel').onclick=()=>modal.remove();
+  document.getElementById('lconfirm-send').onclick=async()=>{
+    document.getElementById('lconfirm-send').disabled=true;
+    document.getElementById('lconfirm-send').textContent='送信中...';
+    await doSubmitLeaderEval();
+    modal.remove();
+  };
+}
+
+async function doSubmitLeaderEval(){
+  const candidates=S.staff.filter(s=>s.is_leader_candidate&&s.is_active!==false);
+  const items=S.leaderItems.filter(i=>i.is_active!==false);
+  let savedCount=0;
+  try{
+    for(const c of candidates){
+      const myValues=S.batchForm.values[c.id]||{};
+      const filled=items.filter(i=>(myValues[i.id]||0)>0);
+      if(filled.length===0)continue;
+      const sum=filled.reduce((a,i)=>a+myValues[i.id],0);
+      const avg=sum/filled.length;
+      const {data:evIns,error:e1}=await sb.from('employee_evaluations').insert({
+        target_staff_id:c.id,
+        evaluation_type:'leader',
+        average_score:avg,
+        total_score:sum,
+        trait_score:0
+      }).select().single();
+      if(e1)throw e1;
+      const scoreRows=filled.map(i=>({evaluation_id:evIns.id,item_id:i.id,score:myValues[i.id]}));
+      const sc=await sb.from('employee_evaluation_scores').insert(scoreRows);
+      if(sc.error)throw sc.error;
+      savedCount++;
+    }
+    showToast(`送信しました!(${savedCount}人分)`);
+    S.sent=true;
+    render();
+    await loadAll();
+  }catch(e){
+    console.error('doSubmitLeaderEval error:',e);
+    showToast('送信エラー: '+e.message,true);
+  }
+}
+
 // 評価割当て: チェックON/OFF切替
 async function toggleAssign(reviewerId, targetId){
   if(!S.assignments[reviewerId])S.assignments[reviewerId]=[];
@@ -1022,6 +1200,21 @@ function renderRadarCards(){
               <div style="font-size:11px;font-weight:900;color:#0f172a;margin-top:3px">${totalScore}<span style="font-size:9px;color:#64748b;font-weight:700">/120</span></div>
               ${d.traitScore!==0?`<div style="font-size:9px;font-weight:700;color:${d.traitScore>0?'#15803d':'#dc2626'};margin-top:1px">補正${d.traitScore>=0?'+':''}${d.traitScore}</div>`:''}
             </div>
+            ${(()=>{
+              // 責任者適性スコアを計算
+              const leaderEvals=myAllEvals.filter(e=>e.evaluation_type==='leader');
+              if(leaderEvals.length===0)return'';
+              const leaderEvalIds=new Set(leaderEvals.map(e=>e.id));
+              const leaderScores=S.scores.filter(s=>leaderEvalIds.has(s.evaluation_id)&&s.score>0);
+              if(leaderScores.length===0)return'';
+              const lAvg=leaderScores.reduce((a,b)=>a+b.score,0)/leaderScores.length;
+              // 4点以上の人だけ「適性あり」バッジを表示
+              if(lAvg<4)return'';
+              return`<div style="text-align:center;flex:none;background:linear-gradient(135deg,#fef9c3,#fde047);border:2.5px solid #ca8a04;border-radius:10px;padding:8px 12px;min-width:90px;box-shadow:0 2px 0 #1e293b">
+                <div style="font-size:18px;line-height:1">👑</div>
+                <div style="font-size:11px;font-weight:900;color:#713f12;letter-spacing:0.5px;line-height:1.2;margin-top:3px">責任者<br>適性あり</div>
+              </div>`;
+            })()}
           </div>
         </div>
 
@@ -1200,23 +1393,21 @@ function renderRadarCards(){
       <span style="margin:0 6px">2 = やや低い</span>・
       <span style="margin:0 6px">1 = 低い</span>
       <br>
-      <strong style="color:#0f172a">🏆 ランク(120点満点):</strong><br>
-      <span style="margin:0 4px;color:#15803d;font-weight:900">SS (110点+)</span>
-      <span style="margin:0 4px;color:#15803d;font-weight:900">S (100点+)</span>
-      <span style="margin:0 4px;color:#15803d;font-weight:900">A+ (90点+)</span>
-      <span style="margin:0 4px;color:#2563eb;font-weight:900">A (80点+)</span>
-      <span style="margin:0 4px;color:#d97706;font-weight:900">B+ (70点+)</span>
-      <span style="margin:0 4px;color:#d97706;font-weight:900">B (60点+)</span>
-      <span style="margin:0 4px;color:#dc2626;font-weight:900">C (60点未満)</span>
+      <strong style="color:#0f172a">🏆 ランク(120点満点)</strong><br>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px;margin:6px 0">
+        <span style="background:#dcfce7;border:1.5px solid #15803d;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;color:#15803d;text-align:center">SS (110+) <span style="color:#0f172a">店長クラス</span></span>
+        <span style="background:#dcfce7;border:1.5px solid #15803d;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;color:#15803d;text-align:center">S (100+) <span style="color:#0f172a">副店長クラス</span></span>
+        <span style="background:#dcfce7;border:1.5px solid #15803d;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;color:#15803d;text-align:center">A+ (90+) <span style="color:#0f172a">主任クラス</span></span>
+        <span style="background:#dbeafe;border:1.5px solid #2563eb;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;color:#2563eb;text-align:center">A (80+)</span>
+        <span style="background:#fef3c7;border:1.5px solid #d97706;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;color:#d97706;text-align:center">B+ (70+)</span>
+        <span style="background:#fef3c7;border:1.5px solid #d97706;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;color:#d97706;text-align:center">B (60+)</span>
+        <span style="background:#fee2e2;border:1.5px solid #dc2626;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;color:#dc2626;text-align:center">C (60未満)</span>
+      </div>
+      <strong style="color:#0f172a">📐 計算式:</strong> 6軸合計 × 4 + 能力補正 + 資格補正<br>
+      <span style="font-size:11px;color:#475569">例: 各軸4点 → 96点 + 補正8 = <strong style="color:#0f172a">104点(S)</strong></span>
       <br>
-      <strong style="color:#0f172a">⚖️ 計算式:</strong>
-      <br>
-      <span style="margin:0 6px">合計点 = (6軸の点数の合計) × 4 + 能力補正 + 資格補正</span><br>
-      <span style="margin:0 6px">  例: 各軸4点 → 4×6×4 = 96点 + 能力+5 + 資格+3 = <strong>104点(Sランク)</strong></span><br>
-      <span style="margin:0 6px">・🧑 個人評価軸 → <strong>自己評価のみ</strong></span><br>
-      <span style="margin:0 6px">・👥🎓 社員さん/アルバイトさん評価軸 → <strong>1:1で合算</strong></span><br>
-      <span style="margin:0 6px">・🏢 店舗実績軸 → <strong>本部採点のみ</strong></span><br>
-      <span style="margin:0 6px;color:#475569">※特殊能力・資格による補正点が加算されます</span>
+      <strong style="color:#0f172a">📊 各軸の評価者:</strong>
+      <span style="font-size:11px">個人評価 = 自己 / 通常軸 = 社員さん+バイト1:1 / 店舗実績 = 本部</span>
     </div>`);
   }
 
@@ -1423,7 +1614,7 @@ function setBatchScore(staffId,itemId,score){
 
 function renderEvalFlow(){
   const type=S.mode;
-  if(type!=='staff' && type!=='parttime'){
+  if(type!=='staff' && type!=='parttime' && type!=='leader'){
     document.getElementById('app').innerHTML='<div style="text-align:center;padding:80px;font-weight:700;color:#64748b">評価モードが選択されていません</div>';
     return;
   }
@@ -1439,6 +1630,12 @@ function renderEvalFlow(){
           <div style="font-size:11px;color:#94a3b8;margin-top:14px;padding:10px;background:#f1f5f9;border-radius:8px;line-height:1.6">🔒 ご回答は<strong>匿名</strong>で記録されています。<br>「誰が誰を何点で評価したか」は管理者からも分かりません</div>
         </div>
       </div>`;
+    return;
+  }
+
+  // 責任者モード
+  if(type==='leader'){
+    renderLeaderEvalFlow();
     return;
   }
 
@@ -2209,6 +2406,101 @@ async function doSubmitAllSteps(){
   }
 }
 
+// 責任者アンケートの画面
+function renderLeaderEvalFlow(){
+  let candidates=S.staff.filter(s=>s.is_leader_candidate&&s.is_active!==false);
+  const items=S.leaderItems.filter(i=>i.is_active!==false);
+
+  // URL の ?store=xxx で店舗指定されていれば、その店の責任者候補だけに絞る
+  const targetStore=S.urlStoreId?S.stores.find(s=>s.id===S.urlStoreId):null;
+  if(targetStore){
+    const allowedIds=new Set(S.staffStores.filter(ss=>ss.store_id===targetStore.id).map(ss=>ss.staff_id));
+    candidates=candidates.filter(s=>allowedIds.has(s.id));
+  }
+
+  if(candidates.length===0||items.length===0){
+    document.getElementById('app').innerHTML=`
+      <div class="card" style="max-width:480px;margin:40px auto">
+        <div style="padding:40px 20px;text-align:center">
+          <div style="font-size:18px;font-weight:900;margin-bottom:10px">⚠️ アンケート準備中</div>
+          <div style="font-size:13px;color:#475569;font-weight:700;line-height:1.6">
+            ${candidates.length===0?(targetStore?`「${targetStore.name}」の責任者候補がまだ選ばれていません<br>`:'責任者候補がまだ選ばれていません<br>'):''}
+            ${items.length===0?'質問項目がまだ作成されていません<br>':''}
+            管理者にお問い合わせください
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  let html=`<div class="card" style="max-width:680px;margin:0 auto">
+    <div style="background:linear-gradient(135deg,#fef9c3,#fef3c7);border-bottom:3px solid #ca8a04;padding:16px 18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:24px">👑</span>
+        <span style="font-size:18px;font-weight:900;color:#713f12">責任者資質アンケート</span>
+        ${targetStore?`<span style="background:${targetStore.color||'#fff'};border:2px solid #1e293b;border-radius:8px;padding:3px 10px;font-size:13px;font-weight:900;color:#0f172a">🏢 ${targetStore.name}</span>`:''}
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#0f172a;line-height:1.6">
+        ${targetStore?`「${targetStore.name}」の責任者候補(${candidates.length}人)を評価してください<br>`:`責任者候補(${candidates.length}人)を評価してください<br>`}
+        <span style="color:#15803d;font-weight:900">🔒 完全匿名</span>
+      </div>
+    </div>
+
+    <div style="padding:14px">`;
+
+  candidates.forEach((c,cidx)=>{
+    const myValues=S.batchForm.values[c.id]||{};
+    const filledCount=items.filter(i=>(myValues[i.id]||0)>0).length;
+    html+=`<div style="background:#fff;border:2.5px solid #1e293b;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 4px 0 #1e293b">
+      <div style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1.5px dashed #cbd5e1;margin-bottom:12px;flex-wrap:wrap">
+        <div style="background:#1e293b;color:#fde047;border-radius:50%;width:32px;height:32px;text-align:center;line-height:32px;font-size:13px;font-weight:900;flex:none">${cidx+1}</div>
+        <div style="flex:1;min-width:120px">
+          <div style="font-size:16px;font-weight:900;color:#0f172a">${c.name}</div>
+          ${c.position?`<div style="font-size:11px;color:#64748b;font-weight:700">${c.position}</div>`:''}
+        </div>
+        <span style="background:#fef3c7;border:1.5px solid #ca8a04;color:#713f12;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:900">責任者候補</span>
+        <span style="font-size:11px;font-weight:700;color:${filledCount===items.length?'#15803d':'#64748b'}">${filledCount}/${items.length}回答</span>
+      </div>`;
+
+    items.forEach((it,idx)=>{
+      const v=(S.batchForm.values[c.id]||{})[it.id]||0;
+      const labels=Array.isArray(it.scaleLabels)&&it.scaleLabels.length===5?it.scaleLabels:['非常に低い','やや低い','標準','高い','非常に高い'];
+      const sg=evalScaleGuide();
+      html+=`<div style="background:#fff;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;margin-bottom:10px">
+        <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:8px 10px;border-radius:6px;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:900;color:#0f172a;line-height:1.4">
+            <span style="display:inline-block;background:#1e293b;color:#fde047;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;font-size:10px;font-weight:900;margin-right:6px">${idx+1}</span>${it.label}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          ${[1,2,3,4,5].map(n=>{
+            const g=sg.find(x=>x.n===n);
+            const selected=v===n;
+            return`<button type="button" onclick="setLeaderBatchScore('${c.id}','${it.id}',${n})" style="display:flex;align-items:center;gap:8px;border:2px solid ${selected?g.color:'#e2e8f0'};background:${selected?g.color+'1a':'#fff'};border-radius:8px;padding:7px 10px;cursor:pointer;text-align:left;font-family:inherit;width:100%">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:${selected?g.color:'#fff'};border:2px solid ${selected?g.color:'#cbd5e1'};color:${selected?'#fff':'#94a3b8'};font-size:12px;font-weight:900;flex:none">${n}</span>
+              <span style="font-size:13px;font-weight:${selected?'900':'700'};color:${selected?'#0f172a':'#475569'};line-height:1.3">${labels[n-1]}</span>
+            </button>`;
+          }).join('')}
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+
+  html+=`<button class="btn btn-primary" style="width:100%;padding:18px;font-size:17px;box-shadow:0 4px 0 #1e293b" onclick="submitLeaderEval()">📤 アンケートを送信する</button>
+    </div>
+  </div>`;
+
+  document.getElementById('app').innerHTML=html;
+}
+
+// 責任者アンケート用のスコア設定
+function setLeaderBatchScore(staffId,itemId,score){
+  if(!S.batchForm.values[staffId])S.batchForm.values[staffId]={};
+  S.batchForm.values[staffId][itemId]=score;
+  render();
+}
+
 function renderAdmin(){
   const origin=location.origin+location.pathname;
   const targetStaff=S.staff.find(m=>m.id===S.targetStaffId);
@@ -2249,6 +2541,7 @@ function renderAdmin(){
     <div class="tabs">
       <button class="tab ${S.tab==='summary'?'active':''}" onclick="S.tab='summary';render()">📊 集計</button>
       <button class="tab ${S.tab==='storeperf'?'active':''}" onclick="S.tab='storeperf';render()">🏢 店舗実績入力</button>
+      <button class="tab ${S.tab==='leader'?'active':''}" onclick="S.tab='leader';render()">👑 責任者アンケート設定</button>
       <button class="tab ${S.tab==='history'?'active':''}" onclick="S.tab='history';render()">📨 送信履歴</button>
       <button class="tab ${S.tab==='partnotes'?'active':''}" onclick="S.tab='partnotes';render()">📝 一言${(S.partnotes||[]).length>0?` <span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px;margin-left:2px">${S.partnotes.length}</span>`:''}</button>
       <button class="tab ${S.tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
@@ -2383,6 +2676,83 @@ function renderAdmin(){
     </div>`;
   }
 
+  if(S.tab==='leader'){
+    const leaderItems=S.leaderItems||[];
+    const candidates=S.staff.filter(s=>s.is_active!==false);
+    const mainPartTimes=S.staff.filter(s=>s.is_active!==false&&s.is_main_parttime);
+    const origin=`${location.origin}${location.pathname}`;
+
+    html+=`<div class="card">
+      <div style="border-bottom:2px solid #1e293b;padding:10px 14px;font-size:14px;font-weight:900;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <span>👑 責任者アンケート設定</span>
+        ${helpToggleButton('leader')}
+      </div>
+      <div style="padding:12px">
+        ${helpBlock('leader',`<div style="background:#fef3c7;border:1.5px solid #ca8a04;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11px;font-weight:700;color:#713f12;line-height:1.6">
+          💡 責任者として育てたいスタッフを評価する追加アンケートです。<br>
+          📝 質問項目を自由に追加・編集できます<br>
+          ⭐ 「責任者候補」にチェック → アンケートの評価対象になります<br>
+          🎓 「メインアルバイトさん」にチェック → 専用のURLが発行され、そのアルバイトさんも評価できます
+        </div>`)}
+
+        <!-- 質問項目セクション -->
+        <div style="background:#fff;border:2px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+            <div style="font-size:14px;font-weight:900;color:#0f172a">📝 質問項目 (${leaderItems.length})</div>
+            <button class="btn btn-sm btn-primary" onclick="addLeaderItem()" style="box-shadow:0 2px 0 #1e293b">➕ 質問を追加</button>
+          </div>
+          ${leaderItems.length===0?`<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:8px;padding:20px;text-align:center;color:#94a3b8;font-size:12px;font-weight:700">「➕ 質問を追加」で責任者の資質を測る質問を作成してください<br><span style="color:#64748b">例: リーダーシップがあるか、判断力があるか、後輩を育てる姿勢があるか</span></div>`:leaderItems.map((it,idx)=>{
+            const isEditing=S.scaleEditUnlocked&&S.scaleEditingItemId===it.id;
+            const labels=Array.isArray(it.scaleLabels)&&it.scaleLabels.length===5?it.scaleLabels:['非常に低い','やや低い','標準','高い','非常に高い'];
+            return`<div style="background:#fef9c3;border:1.5px solid #ca8a04;border-radius:8px;padding:10px;margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+                <span style="background:#1e293b;color:#fde047;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:11px;font-weight:900;flex:none">${idx+1}</span>
+                <input type="text" value="${(it.label||'').replace(/"/g,'&quot;')}" oninput="updateLeaderItemLabel('${it.id}',this.value)" style="flex:1;font-size:13px;font-weight:700;border:1.5px solid #cbd5e1;border-radius:6px;padding:6px 8px;min-width:180px">
+                <button class="btn btn-xs btn-danger" onclick="delLeaderItem('${it.id}')">🗑</button>
+              </div>
+              ${isEditing?`<div style="background:#fff;border:1.5px solid #cbd5e1;border-radius:6px;padding:8px;margin-top:6px">
+                <div style="font-size:10px;font-weight:900;color:#475569;margin-bottom:6px">📝 5段階の選択肢ラベル</div>
+                ${[1,2,3,4,5].map(n=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                  <span style="font-size:10px;font-weight:900;color:#475569;min-width:18px">${n}:</span>
+                  <input type="text" value="${(labels[n-1]||'').replace(/"/g,'&quot;')}" oninput="(function(v){const it=S.leaderItems.find(i=>i.id==='${it.id}');if(!it)return;if(!Array.isArray(it.scaleLabels)||it.scaleLabels.length!==5)it.scaleLabels=['','','','',''];it.scaleLabels[${n-1}]=v;})(this.value)" style="flex:1;font-size:12px;border:1.5px solid #cbd5e1;border-radius:4px;padding:4px 6px">
+                </div>`).join('')}
+                <button class="btn btn-xs btn-primary" onclick="finishLeaderScaleEdit()" style="margin-top:6px">✅ 編集を終わる</button>
+              </div>`:`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+                ${labels.map((l,i)=>`<span style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;color:#475569">${i+1}. ${l}</span>`).join('')}
+                <button class="btn btn-xs btn-ghost" onclick="(function(){const p=prompt('選択肢を編集するパスワード'); if(p==='1234'){S.scaleEditUnlocked=true;S.scaleEditingItemId='${it.id}';render();}else if(p)showToast('パスワードが違います',true);})()" style="font-size:10px">✏️ 選択肢編集</button>
+              </div>`}
+            </div>`;
+          }).join('')}
+        </div>
+
+        <!-- 責任者候補セクション -->
+        <div style="background:#fff;border:2px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:14px">
+          <div style="font-size:14px;font-weight:900;color:#0f172a;margin-bottom:10px">⭐ 責任者候補 (評価対象スタッフ)</div>
+          ${candidates.length===0?`<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:8px;padding:20px;text-align:center;color:#94a3b8;font-size:12px;font-weight:700">先に「🏢👥 店舗・スタッフ管理」タブでスタッフを登録してください</div>`:`<div style="display:flex;flex-direction:column;gap:4px">
+            ${candidates.map(c=>{
+              const checked=c.is_leader_candidate;
+              return`<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:2px solid ${checked?'#ca8a04':'#cbd5e1'};background:${checked?'#fef3c7':'#fff'};border-radius:8px;cursor:pointer;${checked?'box-shadow:0 2px 0 #1e293b':''}">
+                <input type="checkbox" ${checked?'checked':''} onchange="toggleLeaderCandidate('${c.id}')" style="width:18px;height:18px;flex:none">
+                <span style="font-size:13px;font-weight:${checked?'900':'700'};color:#0f172a">${c.name}${c.position?` <span style="font-size:11px;color:#64748b;font-weight:700">(${c.position})</span>`:''}</span>
+              </label>`;
+            }).join('')}
+          </div>`}
+        </div>
+
+        <!-- URL案内 -->
+        <div style="background:#fef9c3;border:2px solid #ca8a04;border-radius:10px;padding:12px;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:900;color:#713f12;margin-bottom:6px">📨 URLの配布について</div>
+          <div style="font-size:11px;color:#475569;font-weight:700;line-height:1.6">
+            「🔗 URL案内」タブで <strong>店舗別URL</strong> を発行できます。<br>
+            その店舗のスタッフ(社員さん・アルバイトさん全員)に同じURLを配布してください。<br>
+            責任者候補がその店に紐付いている場合のみ、評価対象として表示されます。
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+  }
+
   if(S.tab==='history'){
     // 評価データの一覧表示+削除機能
     const sortedEvals=[...S.evals].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -2465,16 +2835,6 @@ function renderAdmin(){
           </div>
         </div>
 
-        <!-- アルバイトさん用URL: 全社員さん向け -->
-        <div class="link-box" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0)">
-          <div style="font-size:14px;font-weight:900;color:#15803d;margin-bottom:4px">🎓 アルバイトさん用アンケート (全社員さん対象)</div>
-          <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:8px;line-height:1.5">登録されている社員さん全員を評価(働く姿勢・チーム力) ※完全匿名</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <div class="url">${origin}?parttime</div>
-            <button class="btn btn-primary btn-sm" onclick="copyUrl('parttime')">📋 コピー</button>
-          </div>
-        </div>
-
         <!-- 店舗別アルバイトさん用URL -->
         ${sortedStores.length>0?`<div style="border:2.5px solid #15803d;border-radius:14px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:12px;margin-bottom:12px">
           <div style="font-size:14px;font-weight:900;color:#15803d;margin-bottom:4px">🏢 店舗別 アルバイトさん用アンケート</div>
@@ -2499,6 +2859,49 @@ function renderAdmin(){
             </div>`;
           }).join('')}
         </div>`:''}
+
+        <!-- 責任者アンケート用URL(店舗別) -->
+        ${(()=>{
+          const candidates=S.staff.filter(s=>s.is_active!==false&&s.is_leader_candidate);
+          if(candidates.length===0)return'';
+
+          let block=`<div style="border:2.5px solid #ca8a04;border-radius:14px;background:linear-gradient(135deg,#fef9c3,#fef3c7);padding:12px;margin-bottom:12px">
+            <div style="font-size:14px;font-weight:900;color:#713f12;margin-bottom:4px">👑 店舗別 責任者アンケート</div>
+            <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:10px;line-height:1.5">
+              責任者候補(${candidates.length}人)を「リーダーシップ」などの観点で評価する追加アンケート。<br>
+              ${S.leaderItems.length}個の質問項目があります。<br>
+              社員さん・アルバイトさん共通URL(完全匿名)
+            </div>`;
+
+          // 店舗別URL
+          const sortedStores=[...S.stores].filter(s=>s.is_active!==false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+          if(sortedStores.length===0){
+            block+=`<div style="background:#fef9c3;border:1.5px solid #ca8a04;border-radius:8px;padding:14px;text-align:center;color:#713f12;font-size:12px;font-weight:700">先に店舗を登録してください</div>`;
+          }else{
+            sortedStores.forEach(st=>{
+              // この店舗に所属する責任者候補の数
+              const allowedIds=new Set(S.staffStores.filter(ss=>ss.store_id===st.id).map(ss=>ss.staff_id));
+              const candidatesInStore=candidates.filter(c=>allowedIds.has(c.id));
+              const memberCount=S.staffStores.filter(ss=>ss.store_id===st.id).length;
+              const url=`${origin}?leader&store=${st.id}`;
+
+              block+=`<div style="background:#fff;border:2px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="background:${st.color||'#fef3c7'};border:1.5px solid #1e293b;border-radius:6px;padding:3px 10px;font-size:13px;font-weight:900;color:#0f172a">🏢 ${st.name}</span>
+                    <span style="font-size:11px;font-weight:700;color:${candidatesInStore.length>0?'#15803d':'#dc2626'}">${candidatesInStore.length>0?`✅ 評価対象 ${candidatesInStore.length}人`:'⚠️ この店舗に責任者候補なし'} / 配布対象${memberCount}人</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                  <div class="url" style="font-size:10px">${url}</div>
+                  <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText('${url}').then(()=>showToast('${st.name}のURLをコピーしました ✅'))">📋 コピー</button>
+                </div>
+              </div>`;
+            });
+          }
+          block+=`</div>`;
+          return block;
+        })()}
 
         ${helpBlock('guide',`<div style="background:#fef9c3;border:1.5px solid #1e293b;border-radius:10px;padding:10px;margin-top:14px">
           <div style="font-size:11px;font-weight:700;color:#475569;line-height:1.7">
