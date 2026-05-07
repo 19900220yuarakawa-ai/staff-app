@@ -113,7 +113,8 @@ const params=new URLSearchParams(location.search);
 // ?parttime = アルバイトさん用 (社員さんを一括評価)
 // ?parttime&store=xxx = その店舗のスタッフだけを評価対象に絞る
 // (パラメータなし) = 管理画面
-if(params.has('leader'))S.mode='leader';
+if(params.has('view'))S.mode='view'; // 全スタッフが集計を閲覧するモード
+else if(params.has('leader'))S.mode='leader';
 else if(params.has('staff'))S.mode='staff';
 else if(params.has('parttime'))S.mode='parttime';
 else if(params.has('self'))S.mode='staff'; // 旧URL互換: ?self は ?staff に統合
@@ -1084,12 +1085,73 @@ function render(){
     return;
   }
   if(S.mode==='admin')renderAdmin();
+  else if(S.mode==='view')renderViewMode();
   else renderEvalFlow();
 }
 
 // =============================================================
 // レーダーチャート: 全員重ね or 個別カード
 // =============================================================
+// =============================================================
+// スタッフ閲覧モード (?view): 全スタッフが集計を見れる画面
+// =============================================================
+function renderViewMode(){
+  // 集計タブと同じ内容(フィルタ・名刺カード)を表示するが、
+  // タブ切替・編集機能などは一切なし(完全閲覧専用)
+
+  // フィルタを表示しないように S.tab='summary' を強制
+  S.tab='summary';
+
+  let html=`
+  <div class="card no-print">
+    <div class="card-header" style="background:linear-gradient(90deg,#dbeafe,#bfdbfe)">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="font-size:17px;font-weight:900;color:#0f172a">📊 集計閲覧画面</div>
+          <span style="background:#fff;border:1.5px solid #1e40af;color:#1e40af;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:900">閲覧専用</span>
+        </div>
+        <div style="font-size:10px;font-weight:700;color:#475569;margin-top:2px">全スタッフの評価結果を確認できます</div>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="loadAll()">🔄 更新</button>
+        <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- フィルタ -->
+  <div class="card no-print"><div style="padding:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>
+        <div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:4px">対象スタッフ</div>
+        <select onchange="S.targetStaffId=this.value;render()">
+          <option value="">— 全員 —</option>
+          ${S.staff.filter(m=>!S.storeFilterId||S.staffStores.some(ss=>ss.staff_id===m.id&&ss.store_id===S.storeFilterId)).map(m=>{
+            const ss=getStaffStores(m.id).map(s=>s.name).join('・');
+            const parts=[];
+            if(m.position)parts.push(m.position);
+            if(ss)parts.push(ss);
+            const label=parts.length?`${m.name}（${parts.join(' / ')}）`:m.name;
+            return`<option value="${m.id}" ${S.targetStaffId===m.id?'selected':''}>${label}</option>`;
+          }).join('')}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:4px">🏢 店舗</div>
+        <select onchange="S.storeFilterId=this.value;S.targetStaffId='';render()">
+          <option value="">— 全店舗 —</option>
+          ${S.stores.map(st=>`<option value="${st.id}" ${S.storeFilterId===st.id?'selected':''}>${st.name}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  </div></div>`;
+
+  // レーダーチャート(名刺カード)
+  html+=renderRadarCards();
+
+  document.getElementById('app').innerHTML=html;
+}
+
 function renderRadarCards(){
   // 軸ラベル決定(S.sectionsの並び + バイト評価軸)
   const sortedSections=[...S.sections].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
@@ -2824,6 +2886,19 @@ function renderAdmin(){
       </div>
       <div style="padding:12px">
         ${helpBlock('guide',`<div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:14px">下記のURLを配布してください</div>`)}
+
+        <!-- 集計閲覧用URL(全スタッフ向け) -->
+        <div class="link-box" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border-color:#1e40af">
+          <div style="font-size:14px;font-weight:900;color:#1e40af;margin-bottom:4px">📊 集計閲覧用URL (全スタッフ向け)</div>
+          <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:8px;line-height:1.5">
+            このURLを送れば、全スタッフが評価結果(名刺カード・レーダーチャート・詳細)を閲覧できます。<br>
+            管理画面の編集機能はなく、見るだけの画面です。
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div class="url">${origin}?view</div>
+            <button class="btn btn-primary btn-sm" onclick="copyUrl('view')">📋 コピー</button>
+          </div>
+        </div>
 
         <!-- 社員さん用URL -->
         <div class="link-box" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)">
