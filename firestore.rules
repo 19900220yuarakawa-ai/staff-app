@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 全コレクション: 誰でも読み書き可
+    // → アプリ側で共通パスワード認証 + URLを社内のみ共有で運用
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

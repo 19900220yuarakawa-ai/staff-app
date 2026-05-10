@@ -1,0 +1,10 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 全パス: 誰でも読み書き可
+    // → アプリ側で共通パスワード認証 + URLを社内のみ共有で運用
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}
