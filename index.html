@@ -159,7 +159,7 @@ async function setupInitialData() {
         {id:'s1', name:'渋谷本店', area:'東京都渋谷区', icon:'🏪', special:false, order:1},
         {id:'s2', name:'新宿東口店', area:'東京都新宿区', icon:'🏢', special:false, order:2},
         {id:'s3', name:'横浜店', area:'神奈川県横浜市', icon:'⚓', special:false, order:3},
-        {id:'shumai', name:'シユマイ部門', area:'専門レシピ管理', icon:'🥟', special:true, order:99}
+        {id:'shumai', name:'シユマイ部門', area:'専門レシピ管理', icon:'', special:true, order:99}
       ];
       for (const s of initialStores) {
         await setDoc(doc(db, "stores", s.id), s);
@@ -179,7 +179,8 @@ const TABS = [
   {i:'fry', l:'炒める', ic:'🥘'},
   {i:'steam', l:'蒸す', ic:'☁️'},
   {i:'raw', l:'生・和える', ic:'🥗'},
-  {i:'sauce', l:'出汁・タレ', ic:'💧'}
+  {i:'sauce', l:'出汁・タレ', ic:'💧'},
+  {i:'potion', l:'ポーション', ic:'🧪'}
 ];
 const SHUMAI_TABS = [
   {i:'all', l:'すべて', ic:'📋'},
@@ -246,14 +247,21 @@ function showToast(msg, isErr = false) {
 }
 
 function newForm(base) {
-  if (base) return JSON.parse(JSON.stringify(base));
+  if (base) {
+    const copy = JSON.parse(JSON.stringify(base));
+    // 既存データの後方互換: isSauceがtrueならrecipeTypeをsauceに
+    if (!copy.recipeType) {
+      copy.recipeType = copy.isSauce ? 'sauce' : 'normal';
+    }
+    return copy;
+  }
   return {
-    name:'', isSauce:false, season:'all', time:'', cost:'', method:'grill',
+    name:'', recipeType:'normal', isSauce:false, season:'all', time:'', cost:'', method:'grill',
     temp:'h', genre:null, creator:'', baseQty:1000, baseUnit:'g',
     allergy:[], imgURL:null, imgFile:null,
     ingredients:[{name:'',value:null,unit:'',linkTo:null}],
     steps:[{text:'',time:'',temp:'',note:'',photoURL:null,photoFile:null}],
-    memo:'', stores:[S.currentStore], inUse:[], editId:null,
+    memo:'', stores:[S.currentStore], inUse:[], editId:null, archived:false,
     storage: { rawShelfLife:'', rawTemp:'', cookedShelfLife:'', cookedTemp:'', serviceTime:'', container:'', notes:'' }
   };
 }
@@ -308,7 +316,8 @@ async function saveRecipe(form, editorName) {
       stepsToSave.push({ text:s.text, time:s.time||'', temp:s.temp||'', note:s.note||'', photoURL });
     }
     const data = {
-      name: form.name, isSauce: form.isSauce, season: form.season,
+      name: form.name, isSauce: form.recipeType === 'sauce', recipeType: form.recipeType || 'normal',
+      season: form.season,
       time: form.time || '—', cost: form.cost || '—', method: form.method,
       temp: form.temp, genre: form.genre, creator: form.creator,
       baseQty: parseFloat(form.baseQty) || 1000, baseUnit: form.baseUnit,
@@ -317,6 +326,7 @@ async function saveRecipe(form, editorName) {
       steps: stepsToSave.filter(s => s.text && s.text.trim()),
       memo: form.memo || '', stores: form.stores, inUse: form.inUse || [],
       storage: form.storage || null,
+      archived: form.archived || false,
       updatedAt: new Date().toISOString(),
       updatedBy: editorName
     };
@@ -377,6 +387,36 @@ async function deleteStore(storeId) {
     await loadStores();
     showToast("店舗を削除しました");
     render();
+  } catch (e) { console.error(e); showToast("削除失敗", true); }
+}
+
+async function archiveRecipe(recId, recName) {
+  if (!confirm(`「${recName}」をアーカイブしますか?\n\n※完全に削除されるわけではありません。\n管理画面から復元できます。`)) return;
+  try {
+    await window.fb.updateDoc(window.fb.doc(window.fb.db, "recipes", recId), {
+      archived: true,
+      archivedAt: new Date().toISOString()
+    });
+    showToast("アーカイブしました");
+  } catch (e) { console.error(e); showToast("アーカイブ失敗", true); }
+}
+
+async function restoreRecipe(recId) {
+  try {
+    await window.fb.updateDoc(window.fb.doc(window.fb.db, "recipes", recId), {
+      archived: false,
+      archivedAt: null
+    });
+    showToast("復元しました");
+  } catch (e) { console.error(e); showToast("復元失敗", true); }
+}
+
+async function permanentDeleteRecipe(recId, recName) {
+  if (!confirm(`「${recName}」を完全削除しますか?\n\n⚠️ この操作は元に戻せません！\n本当によろしいですか?`)) return;
+  if (!confirm(`本当に「${recName}」を完全削除しますか?\n最終確認です。`)) return;
+  try {
+    await window.fb.deleteDoc(window.fb.doc(window.fb.db, "recipes", recId));
+    showToast("完全削除しました");
   } catch (e) { console.error(e); showToast("削除失敗", true); }
 }
 
@@ -486,6 +526,22 @@ ${S.stores.filter(s=>!s.special).map(s=>`<div style="display:flex;align-items:ce
 <button class="btn-out" data-a="add-store">＋ 店舗を追加</button>
 </div>
 </div>
+<h3 style="font-size:14px;font-weight:500;margin:0 0 10px">🗑 アーカイブ済みレシピ</h3>
+<div style="background:#fff;border:0.5px solid #ddd;border-radius:10px;padding:14px;margin-bottom:20px">
+${(() => {
+  const archived = S.recipes.filter(r => r.archived);
+  if (archived.length === 0) return '<p style="margin:0;font-size:12px;color:#999;text-align:center;padding:10px 0">アーカイブされたレシピはありません</p>';
+  return archived.map(r => `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:0.5px solid #eee">
+<div style="flex:1">
+<p style="margin:0;font-size:13px;font-weight:500">${escapeHtml(r.name)}</p>
+<p style="margin:2px 0 0;font-size:11px;color:#666">考案: ${escapeHtml(r.creator||'—')} ・ アーカイブ日: ${(r.archivedAt||'').substring(0,10)||'—'}</p>
+</div>
+<button class="cb" data-a="restore-rec" data-x="${r.id}" style="color:#0F6E56;border-color:#5DCAA5;background:#E1F5EE;font-size:11px">復元</button>
+<button class="cb" data-a="del-rec" data-x="${r.id}" data-name="${escapeHtml(r.name)}" style="color:#791F1F;border-color:#F7C1C1;background:#FCEBEB;font-size:11px">完全削除</button>
+</div>`).join('');
+})()}
+</div>
+
 <h3 style="font-size:14px;font-weight:500;margin:0 0 10px">🔑 管理者パスワード変更</h3>
 <div style="background:#fff;border:0.5px solid #ddd;border-radius:10px;padding:14px;margin-bottom:20px">
 <p style="font-size:11px;color:#666;margin:0 0 4px">現在のパスワード</p>
@@ -545,7 +601,7 @@ ${spec.length > 0 ? `
 <div style="margin:20px 0 8px;display:flex;align-items:center;gap:8px"><div style="flex:1;height:0.5px;background:#ddd"></div><span style="font-size:11px;color:#999">専門部門</span><div style="flex:1;height:0.5px;background:#ddd"></div></div>
 ${spec.map(s => `
 <div data-a="ssel" data-x="${s.id}" style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;border:1px solid #F7C1C1;background:#FCF5F5;cursor:pointer;margin-bottom:10px">
-<div style="width:42px;height:42px;border-radius:10px;background:#FCEBEB;display:flex;align-items:center;justify-content:center;font-size:20px">${s.icon||'🥟'}</div>
+<div style="width:42px;height:42px;border-radius:10px;background:#FCEBEB;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#791F1F">${s.icon||'専'}</div>
 <div style="flex:1"><p style="margin:0;font-size:14px;font-weight:500">${escapeHtml(s.name)}</p><p style="margin:2px 0 0;font-size:12px;color:#791F1F">${escapeHtml(s.area||'')}</p></div>
 <span style="color:#999;font-size:18px">›</span>
 </div>`).join('')}` : ''}
@@ -554,13 +610,17 @@ ${spec.map(s => `
 
 function renderMenu() {
   const sh = isShumaiStore();
-  let l = S.recipes.filter(v => (v.stores || []).includes(S.currentStore));
+  // archivedフラグ付きはアーカイブされたレシピなので除外
+  let l = S.recipes.filter(v => (v.stores || []).includes(S.currentStore) && !v.archived);
+  // recipeTypeへの後方互換マッピング
+  const getType = (v) => v.recipeType || (v.isSauce ? 'sauce' : 'normal');
   if (sh) {
     if (S.tab === 'inuse') l = l.filter(v => (v.inUse || []).includes(S.currentStore));
   } else {
     if (S.tab === 'inuse') l = l.filter(v => (v.inUse || []).includes(S.currentStore));
-    else if (S.tab === 'sauce') l = l.filter(v => v.isSauce);
-    else l = l.filter(v => !v.isSauce && v.method === S.tab);
+    else if (S.tab === 'sauce') l = l.filter(v => getType(v) === 'sauce');
+    else if (S.tab === 'potion') l = l.filter(v => getType(v) === 'potion');
+    else l = l.filter(v => getType(v) === 'normal' && v.method === S.tab);
   }
   if (S.q) l = l.filter(v => (v.name||'').includes(S.q) || (v.creator||'').includes(S.q));
   if (S.fg.length) l = l.filter(v => v.genre && S.fg.includes(v.genre));
@@ -575,7 +635,7 @@ function renderMenu() {
 <p style="flex:1;text-align:center;margin:0;font-size:14px;font-weight:500">${escapeHtml(gn(S.currentStore))}</p>
 <button class="nv" data-a="tf" style="position:relative">⚙️${fc?`<span style="position:absolute;top:4px;right:4px;background:#E24B4A;color:#fff;font-size:9px;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 3px">${fc}</span>`:''}</button>
 </div>
-${sh ? `<div style="background:#FCEBEB;padding:6px 18px;font-size:11px;color:#791F1F;text-align:center">🥟 シユマイ専門レシピ</div>` : ''}
+${sh ? `<div style="background:#FCEBEB;padding:6px 18px;font-size:11px;color:#791F1F;text-align:center">専門レシピ</div>` : ''}
 <div style="padding:8px 18px"><div style="position:relative"><input class="fi" data-f="q" placeholder="メニュー名・考案者で検索" value="${escapeHtml(S.q)}" style="padding-left:32px"><span style="position:absolute;left:10px;top:11px;color:#999">🔍</span></div></div>
 <div style="display:flex;padding:0 8px;border-bottom:0.5px solid #ddd;overflow-x:auto">
 ${tabsToShow.map(t => `<button class="tb ${S.tab===t.i?'on':''}" data-a="tab" data-x="${t.i}">${t.ic} ${t.l}</button>`).join('')}
@@ -649,7 +709,7 @@ ${x.imgURL?`<img src="${escapeHtml(x.imgURL)}" style="width:100%;height:200px;ob
 </div>
 <button class="btn-p" data-a="pr" style="background:#0C447C;margin-bottom:14px">🖨 現在の倍率で印刷</button>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-<div style="background:#f5f4f0;border-radius:8px;padding:10px;text-align:center"><p style="font-size:11px;color:#666;margin:0 0 2px">調理方法</p><p style="font-size:13px;font-weight:500;margin:0">${x.isSauce?'出汁・タレ':escapeHtml(ml(x.method)||'—')}</p></div>
+<div style="background:#f5f4f0;border-radius:8px;padding:10px;text-align:center"><p style="font-size:11px;color:#666;margin:0 0 2px">調理方法</p><p style="font-size:13px;font-weight:500;margin:0">${(x.recipeType||(x.isSauce?'sauce':'normal'))==='sauce'?'出汁・タレ':(x.recipeType==='potion'?'ポーション':escapeHtml(ml(x.method)||'—'))}</p></div>
 <div style="background:#f5f4f0;border-radius:8px;padding:10px;text-align:center"><p style="font-size:11px;color:#666;margin:0 0 2px">調理時間</p><p style="font-size:13px;font-weight:500;margin:0">${escapeHtml(x.time||'—')}</p></div>
 <div style="background:#f5f4f0;border-radius:8px;padding:10px;text-align:center"><p style="font-size:11px;color:#666;margin:0 0 2px">原価</p><p style="font-size:13px;font-weight:500;margin:0">${escapeHtml(x.cost||'—')}</p></div>
 <div style="background:#f5f4f0;border-radius:8px;padding:10px;text-align:center"><p style="font-size:11px;color:#666;margin:0 0 2px">提供店舗</p><p style="font-size:13px;font-weight:500;margin:0">${(x.stores||[]).length}店舗</p></div>
@@ -708,6 +768,11 @@ ${x.storage.notes?`<p style="margin:8px 0 0;padding:8px 10px;background:#fafafa;
 </div>`:''}
 </div>`:''}
 ${x.memo?`<div style="background:#FAEEDA;border-radius:8px;padding:10px 14px;margin-top:10px"><p style="margin:0 0 4px;font-size:11px;color:#854F0B;font-weight:500">💡 メモ</p><p style="margin:0;font-size:13px;color:#412402">${escapeHtml(x.memo)}</p></div>`:''}
+
+<div style="margin-top:30px;padding-top:20px;border-top:0.5px solid #ddd">
+<button class="btn-out" data-a="arc" data-x="${x.id}" style="color:#791F1F;border-color:#F7C1C1">🗑 このレシピをアーカイブ</button>
+<p style="margin:6px 0 0;font-size:11px;color:#999;text-align:center">※完全に削除されません。管理画面から復元できます</p>
+</div>
 </div>`;
 }
 
@@ -731,11 +796,12 @@ ${f.imgURL||(f.imgFile&&f.imgFilePreview)?`<img src="${escapeHtml(f.imgFilePrevi
 <input class="fi" data-f="creator" value="${escapeHtml(f.creator)}" placeholder="例: 田中シェフ">
 <label class="lb">種類</label>
 <div style="display:flex;gap:5px;flex-wrap:wrap">
-<button class="cb met ${!f.isSauce?'on':''}" data-a="fis" data-x="0">通常レシピ</button>
-<button class="cb met ${f.isSauce?'on':''}" data-a="fis" data-x="1">出汁・タレ</button>
+<button class="cb met ${(f.recipeType||'normal')==='normal'?'on':''}" data-a="fis" data-x="normal">通常レシピ</button>
+<button class="cb met ${f.recipeType==='sauce'?'on':''}" data-a="fis" data-x="sauce">💧 出汁・タレ</button>
+<button class="cb met ${f.recipeType==='potion'?'on':''}" data-a="fis" data-x="potion">🧪 ポーション</button>
 </div>
-${!f.isSauce?`<label class="lb">調理方法</label>
-<div style="display:flex;gap:5px;flex-wrap:wrap">${TABS.filter(t=>!t.special&&t.i!=='sauce').map(m=>`<button class="cb met ${f.method===m.i?'on':''}" data-a="fm" data-x="${m.i}">${m.ic} ${m.l}</button>`).join('')}</div>`:''}
+${(f.recipeType||'normal')==='normal'?`<label class="lb">調理方法</label>
+<div style="display:flex;gap:5px;flex-wrap:wrap">${TABS.filter(t=>!t.special&&t.i!=='sauce'&&t.i!=='potion').map(m=>`<button class="cb met ${f.method===m.i?'on':''}" data-a="fm" data-x="${m.i}">${m.ic} ${m.l}</button>`).join('')}</div>`:''}
 <label class="lb">季節タグ</label>
 <div style="display:flex;gap:5px;flex-wrap:wrap">${SE.map(s=>`<button class="cb gen ${f.season===s.i?'on':''}" data-a="fse-form" data-x="${s.i}">${s.l}</button>`).join('')}</div>
 <label class="lb">ジャンル</label>
@@ -876,6 +942,15 @@ function bind() {
       else if (a === 'clpr') { S.printMode = false; render(); }
       else if (a === 'dopr') { S.printMode = false; render(); setTimeout(()=>window.print(),300); }
       else if (a === 'tu') { toggleInUse(v); }
+      else if (a === 'arc') {
+        const rec = S.recipes.find(r => r.id === v);
+        if (rec) archiveRecipe(v, rec.name).then(() => { S.sc = 'menu'; render(); });
+      }
+      else if (a === 'restore-rec') { restoreRecipe(v); }
+      else if (a === 'del-rec') {
+        const name = el.dataset.name || '';
+        permanentDeleteRecipe(v, name);
+      }
       else if (a === 'op') { S.form = newForm(); S.sc = 'form'; render(); }
       else if (a === 'ed') { const x = S.recipes.find(r=>r.id===S.rec); S.form = newForm(x); S.form.editId = S.rec; S.sc='form'; render(); }
       else if (a === 'cancel-form') { if(confirm('編集を破棄しますか?')) { S.form = null; S.sc = S.rec?'detail':'menu'; render(); } }
@@ -891,7 +966,7 @@ function bind() {
         S.confirmModal = false;
         saveRecipe(S.form, S.editorName).then(() => { S.form = null; S.sc = S.rec?'detail':'menu'; render(); });
       }
-      else if (a === 'fis') { S.form.isSauce = v==='1'; if(S.form.isSauce)S.form.method='simmer'; render(); }
+      else if (a === 'fis') { S.form.recipeType = v; S.form.isSauce = (v === 'sauce'); if(v !== 'normal') S.form.method = 'simmer'; render(); }
       else if (a === 'fm') { S.form.method = v; render(); }
       else if (a === 'fse-form') { S.form.season = v; render(); }
       else if (a === 'fgn') { S.form.genre = S.form.genre===v?null:v; render(); }
