@@ -1059,7 +1059,7 @@ ${f.steps.map((s,idx)=>`<div style="background:#fafafa;border-radius:10px;paddin
 <textarea class="fi" data-f="memo" rows="2">${escapeHtml(f.memo)}</textarea>
 <label class="lb">提供店舗</label>
 <button class="nv" data-a="stores-all" style="font-size:11px;color:#0C447C;padding:4px 0;margin-bottom:6px">${f.stores.length===S.stores.length?'すべて解除':'すべての店舗を選択'}</button>
-${S.stores.map(s=>{const on=f.stores.includes(s.id);const cur=s.id===S.currentStore;return `<div class="scb ${on?'on':''}" data-a="ts" data-x="${s.id}"><input type="checkbox" ${on?'checked':''} style="width:18px;height:18px" readonly><span style="flex:1;font-size:13px">${escapeHtml(s.name)}</span>${cur?'<span class="bp">現在</span>':''}</div>`}).join('')}
+${S.stores.map(s=>{const on=f.stores.includes(s.id);const cur=s.id===S.currentStore;return `<div class="scb ${on?'on':''}" data-a="ts" data-x="${s.id}"><input type="checkbox" ${on?'checked':''} style="width:18px;height:18px;pointer-events:none" tabindex="-1"><span style="flex:1;font-size:13px">${escapeHtml(s.name)}</span>${cur?'<span class="bp">現在</span>':''}</div>`}).join('')}
 </div>`;
 }
 
