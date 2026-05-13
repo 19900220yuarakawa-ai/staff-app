@@ -486,50 +486,89 @@ async function restoreFromBackup(file) {
   if (!confirm(`バックアップファイル「${file.name}」から復元しますか?\n\n⚠️ 注意:\n・既存のレシピと同じIDのものは上書きされます\n・既存にないレシピは追加されます\n・既存のレシピで、バックアップにないものは削除されません`)) return;
   
   S.loading = true; render();
+  let recipeCount = 0;
+  let storeCount = 0;
+  let errors = [];
+  
   try {
     const text = await file.text();
     const backup = JSON.parse(text);
+    
+    console.log('[復元] バックアップ読込完了:', backup);
     
     if (!backup.recipes || !Array.isArray(backup.recipes)) {
       throw new Error('無効なバックアップファイル形式です');
     }
     
-    let recipeCount = 0;
-    let storeCount = 0;
+    console.log(`[復元] レシピ${backup.recipes.length}件, 店舗${(backup.stores||[]).length}件`);
     
-    // 店舗を先に復元するか確認
+    // 店舗を復元するか確認
     const restoreStores = backup.stores && Array.isArray(backup.stores) && 
       confirm(`店舗データも復元しますか? (${backup.stores.length}件)\n\n※既存の店舗が変更される可能性があります`);
     
     if (restoreStores) {
       for (const s of backup.stores) {
-        const id = s.id;
-        const data = { ...s };
-        delete data.id;
-        await window.fb.setDoc(window.fb.doc(window.fb.db, "stores", id), data);
-        storeCount++;
+        try {
+          const id = s.id;
+          if (!id) { errors.push(`店舗ID無し: ${s.name||'(不明)'}`); continue; }
+          const data = { ...s };
+          delete data.id;
+          await window.fb.setDoc(window.fb.doc(window.fb.db, "stores", id), data);
+          storeCount++;
+        } catch(e) {
+          console.error('[復元] 店舗エラー:', s, e);
+          errors.push(`店舗「${s.name||'?'}」: ${e.message}`);
+        }
       }
       await loadStores();
     }
     
     // レシピを復元
     for (const r of backup.recipes) {
-      const id = r.id;
-      const data = { ...r };
-      delete data.id;
-      await window.fb.setDoc(window.fb.doc(window.fb.db, "recipes", id), data);
-      recipeCount++;
+      try {
+        const id = r.id;
+        if (!id) { errors.push(`レシピID無し: ${r.name||'(不明)'}`); continue; }
+        const data = { ...r };
+        delete data.id;
+        // archived フラグを明示的にfalseにする（古いバックアップ対応）
+        if (data.archived === undefined) data.archived = false;
+        await window.fb.setDoc(window.fb.doc(window.fb.db, "recipes", id), data);
+        recipeCount++;
+        console.log(`[復元] レシピ復元: ${data.name} (id:${id})`);
+      } catch(e) {
+        console.error('[復元] レシピエラー:', r, e);
+        errors.push(`レシピ「${r.name||'?'}」: ${e.message}`);
+      }
     }
     
-    // 復元したレシピをローカルstateにも即時反映（onSnapshotの反映を待たない）
-    // ただしonSnapshotが既に動いてれば、すぐに反映されるはず
-    // 念のため、Firestoreから最新を取得し直す
+    console.log(`[復元] 完了: レシピ${recipeCount}件 / 店舗${storeCount}件 / エラー${errors.length}件`);
+    
+    // 一旦subscribeを停止して、最新データを直接取得→再開
+    if (S.unsubRecipes) {
+      S.unsubRecipes();
+      S.unsubRecipes = null;
+    }
+    
+    // Firestoreから最新を直接取得
     const recipesSnap = await window.fb.getDocs(window.fb.collection(window.fb.db, "recipes"));
     S.recipes = recipesSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    console.log(`[復元] 再取得後のレシピ件数: ${S.recipes.length}`);
     
-    showToast(`復元完了: レシピ${recipeCount}件、店舗${storeCount}件`);
+    // subscribeを再開
+    subscribeRecipes();
+    
+    // 結果メッセージ
+    let msg = `復元完了: レシピ${recipeCount}件、店舗${storeCount}件`;
+    if (errors.length > 0) {
+      msg += ` (エラー${errors.length}件)`;
+      console.warn('[復元] エラー詳細:', errors);
+      alert('復元完了しましたが、一部エラーがありました:\n\n' + errors.slice(0,5).join('\n') + (errors.length > 5 ? `\n...他${errors.length-5}件` : ''));
+    }
+    showToast(msg);
+    
   } catch (e) {
-    console.error(e);
+    console.error('[復元] 致命的エラー:', e);
+    alert('復元失敗:\n' + e.message);
     showToast("復元失敗: " + e.message, true);
   } finally {
     S.loading = false; render();
@@ -1192,7 +1231,27 @@ function bind() {
       }
     };
   });
+  // 検索入力のIME（日本語変換）対応とフィルタリング処理
+  root.querySelectorAll('[data-f="q"]').forEach(el => {
+    let composing = false;
+    el.addEventListener('compositionstart', () => { composing = true; });
+    el.addEventListener('compositionend', () => {
+      composing = false;
+      S.q = el.value;
+      clearTimeout(S.qTimer);
+      S.qTimer = setTimeout(() => { renderSearchResults(); }, 100);
+    });
+    el.addEventListener('input', () => {
+      // 日本語変換中は検索を実行しない
+      if (composing) return;
+      S.q = el.value;
+      clearTimeout(S.qTimer);
+      S.qTimer = setTimeout(() => { renderSearchResults(); }, 200);
+    });
+  });
+
   root.querySelectorAll('[data-f]').forEach(el => {
+    if (el.dataset.f === 'q') return; // 検索は別ハンドラで処理済み
     el.oninput = () => {
       const f = el.dataset.f;
       const i = parseInt(el.dataset.i);
@@ -1201,30 +1260,7 @@ function bind() {
       if (f === 'new-pw') { S.newPwInput = el.value; return; }
       if (f === 'new-admin-pw') { S.newAdminPwInput = el.value; return; }
       if (f === 'editor-name') { S.editorName = el.value; return; }
-      if (!S.form) {
-        if (f === 'q') {
-          // 検索: debounceで遅延処理、入力中はフォーカス維持
-          S.q = el.value;
-          clearTimeout(S.qTimer);
-          S.qTimer = setTimeout(() => {
-            const focused = document.activeElement;
-            const wasSearchFocused = focused && focused.dataset && focused.dataset.f === 'q';
-            const cursorPos = wasSearchFocused ? focused.selectionStart : null;
-            render();
-            // 再描画後にフォーカスとカーソル位置を復元
-            if (wasSearchFocused) {
-              setTimeout(() => {
-                const newInput = document.querySelector('[data-f="q"]');
-                if (newInput) {
-                  newInput.focus();
-                  if (cursorPos !== null) newInput.setSelectionRange(cursorPos, cursorPos);
-                }
-              }, 0);
-            }
-          }, 250);
-        }
-        return;
-      }
+      if (!S.form) return;
       if (f==='ing-name') S.form.ingredients[i].name = el.value;
       else if (f==='ing-value') S.form.ingredients[i].value = el.value===''?null:parseFloat(el.value);
       else if (f==='ing-unit') S.form.ingredients[i].unit = el.value;
@@ -1235,6 +1271,28 @@ function bind() {
       else S.form[f] = el.value;
     };
   });
+}
+
+// 検索結果だけ再描画する関数（入力欄を壊さない）
+function renderSearchResults() {
+  // メニュー画面でのみ動作
+  if (S.sc !== 'menu') return;
+  // 検索結果リストの親要素を探して、リスト部分だけ差し替え
+  // 通常のrender()を呼んで、入力欄のフォーカス・カーソル位置を復元
+  const focused = document.activeElement;
+  const wasSearchFocused = focused && focused.dataset && focused.dataset.f === 'q';
+  const cursorPos = wasSearchFocused ? focused.selectionStart : null;
+  const cursorEnd = wasSearchFocused ? focused.selectionEnd : null;
+  render();
+  if (wasSearchFocused) {
+    const newInput = document.querySelector('[data-f="q"]');
+    if (newInput) {
+      newInput.focus();
+      if (cursorPos !== null && cursorEnd !== null) {
+        try { newInput.setSelectionRange(cursorPos, cursorEnd); } catch(e) {}
+      }
+    }
+  }
 }
 
 window.appInit = async function() {
