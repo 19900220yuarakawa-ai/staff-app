@@ -497,6 +497,21 @@ async function restoreFromBackup(file) {
     let recipeCount = 0;
     let storeCount = 0;
     
+    // 店舗を先に復元するか確認
+    const restoreStores = backup.stores && Array.isArray(backup.stores) && 
+      confirm(`店舗データも復元しますか? (${backup.stores.length}件)\n\n※既存の店舗が変更される可能性があります`);
+    
+    if (restoreStores) {
+      for (const s of backup.stores) {
+        const id = s.id;
+        const data = { ...s };
+        delete data.id;
+        await window.fb.setDoc(window.fb.doc(window.fb.db, "stores", id), data);
+        storeCount++;
+      }
+      await loadStores();
+    }
+    
     // レシピを復元
     for (const r of backup.recipes) {
       const id = r.id;
@@ -506,19 +521,11 @@ async function restoreFromBackup(file) {
       recipeCount++;
     }
     
-    // 店舗を復元（オプション）
-    if (backup.stores && Array.isArray(backup.stores)) {
-      if (confirm(`店舗データも復元しますか? (${backup.stores.length}件)\n\n※既存の店舗が変更される可能性があります`)) {
-        for (const s of backup.stores) {
-          const id = s.id;
-          const data = { ...s };
-          delete data.id;
-          await window.fb.setDoc(window.fb.doc(window.fb.db, "stores", id), data);
-          storeCount++;
-        }
-        await loadStores();
-      }
-    }
+    // 復元したレシピをローカルstateにも即時反映（onSnapshotの反映を待たない）
+    // ただしonSnapshotが既に動いてれば、すぐに反映されるはず
+    // 念のため、Firestoreから最新を取得し直す
+    const recipesSnap = await window.fb.getDocs(window.fb.collection(window.fb.db, "recipes"));
+    S.recipes = recipesSnap.docs.map(d => ({ id:d.id, ...d.data() }));
     
     showToast(`復元完了: レシピ${recipeCount}件、店舗${storeCount}件`);
   } catch (e) {
@@ -1194,7 +1201,30 @@ function bind() {
       if (f === 'new-pw') { S.newPwInput = el.value; return; }
       if (f === 'new-admin-pw') { S.newAdminPwInput = el.value; return; }
       if (f === 'editor-name') { S.editorName = el.value; return; }
-      if (!S.form) { if(f==='q'){S.q=el.value;render();} return; }
+      if (!S.form) {
+        if (f === 'q') {
+          // 検索: debounceで遅延処理、入力中はフォーカス維持
+          S.q = el.value;
+          clearTimeout(S.qTimer);
+          S.qTimer = setTimeout(() => {
+            const focused = document.activeElement;
+            const wasSearchFocused = focused && focused.dataset && focused.dataset.f === 'q';
+            const cursorPos = wasSearchFocused ? focused.selectionStart : null;
+            render();
+            // 再描画後にフォーカスとカーソル位置を復元
+            if (wasSearchFocused) {
+              setTimeout(() => {
+                const newInput = document.querySelector('[data-f="q"]');
+                if (newInput) {
+                  newInput.focus();
+                  if (cursorPos !== null) newInput.setSelectionRange(cursorPos, cursorPos);
+                }
+              }, 0);
+            }
+          }, 250);
+        }
+        return;
+      }
       if (f==='ing-name') S.form.ingredients[i].name = el.value;
       else if (f==='ing-value') S.form.ingredients[i].value = el.value===''?null:parseFloat(el.value);
       else if (f==='ing-unit') S.form.ingredients[i].unit = el.value;
