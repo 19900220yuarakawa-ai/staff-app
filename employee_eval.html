@@ -876,6 +876,13 @@ function showLeaderConfirmModal({candidates,items,unfilledCount,completedCount})
   modal.innerHTML=`
     <div style="background:#fff;border:3px solid #1e293b;border-radius:16px;max-width:480px;width:100%;padding:18px;box-shadow:0 8px 0 #1e293b;max-height:90vh;overflow-y:auto">
       <div style="font-size:18px;font-weight:900;color:#0f172a;margin-bottom:12px;text-align:center">👑 責任者資質アンケート 送信確認</div>
+      ${unfilledCount>0?`<div style="background:linear-gradient(135deg,#fee2e2,#fecaca);border:3px solid #dc2626;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 3px 0 #991b1b">
+        <div style="font-size:14px;font-weight:900;color:#7f1d1d;margin-bottom:8px;text-align:center">⚠️ 未回答が ${unfilledCount} 項目あります</div>
+        <div style="font-size:12px;font-weight:700;color:#7f1d1d;line-height:1.6">
+          このまま送信すると、未回答項目は<strong>「評価なし」として記録されません</strong>。<br>
+          採点を続けるか、このまま送信するか、ご判断ください。
+        </div>
+      </div>`:''}
       <div style="background:#fef3c7;border:2.5px solid #ca8a04;border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:13px;font-weight:900;color:#713f12;margin-bottom:6px">🔒 完全匿名で送信されます</div>
         <div style="font-size:12px;font-weight:700;color:#0f172a;line-height:1.6">誰が回答したかは記録されません。</div>
@@ -885,9 +892,9 @@ function showLeaderConfirmModal({candidates,items,unfilledCount,completedCount})
         ・責任者候補の評価: <strong style="color:#0f172a">${completedCount}/${candidates.length}人</strong>分<br>
         ${unfilledCount>0?`・未回答: <strong style="color:#dc2626">${unfilledCount}項目</strong>(送信時はスキップされます)`:'・<strong style="color:#15803d">すべて回答済み</strong> ✅'}
       </div>
-      <div style="display:flex;gap:8px">
-        <button id="lconfirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">◀ 戻って修正</button>
-        <button id="lconfirm-send" class="btn btn-primary" style="flex:2;padding:14px;font-size:14px;box-shadow:0 4px 0 #1e293b">📤 匿名で送信</button>
+      <div style="display:flex;gap:8px;flex-direction:${unfilledCount>0?'column':'row'}">
+        <button id="lconfirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">${unfilledCount>0?'◀ 戻って未回答項目を採点する':'◀ 戻って修正'}</button>
+        <button id="lconfirm-send" class="btn" style="flex:${unfilledCount>0?'1':'2'};padding:14px;font-size:14px;${unfilledCount>0?'background:#dc2626;color:#fff;border-color:#7f1d1d;box-shadow:0 4px 0 #7f1d1d':'background:#fde047;color:#0f172a;box-shadow:0 4px 0 #1e293b'}">${unfilledCount>0?'⚠️ 未回答のまま送信する':'📤 匿名で送信'}</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -2005,6 +2012,13 @@ function showConfirmModalForCombined({reviewer,targets,unfilledCount,selfFilled,
   modal.innerHTML=`
     <div style="background:#fff;border:3px solid #1e293b;border-radius:16px;max-width:480px;width:100%;padding:18px;box-shadow:0 8px 0 #1e293b;max-height:90vh;overflow-y:auto">
       <div style="font-size:18px;font-weight:900;color:#0f172a;margin-bottom:12px;text-align:center">📤 送信前の最終確認</div>
+      ${unfilledCount>0?`<div style="background:linear-gradient(135deg,#fee2e2,#fecaca);border:3px solid #dc2626;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 3px 0 #991b1b">
+        <div style="font-size:14px;font-weight:900;color:#7f1d1d;margin-bottom:8px;text-align:center">⚠️ 未回答が ${unfilledCount} 項目あります</div>
+        <div style="font-size:12px;font-weight:700;color:#7f1d1d;line-height:1.6">
+          このまま送信すると、未回答項目は<strong>「評価なし」として記録されません</strong>。<br>
+          採点を続けるか、このまま送信するか、ご判断ください。
+        </div>
+      </div>`:''}
       <div style="background:#fff3c7;border:2.5px solid #ca8a04;border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:13px;font-weight:900;color:#713f12;margin-bottom:8px">⚠️ 重要: お名前の確認</div>
         <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.6">あなたは本当に<br><span style="display:inline-block;background:#fde047;border:2px solid #1e293b;border-radius:8px;padding:6px 14px;margin:6px 0;font-size:18px;font-weight:900">${reviewer.name}${reviewer.position?'('+reviewer.position+')':''}</span><br>さんで間違いないですか?<br><br><span style="color:#dc2626;font-weight:900">⚠️ 違う名前で送信すると、その人の自己評価として記録されてしまいます</span></div>
@@ -2015,9 +2029,9 @@ function showConfirmModalForCombined({reviewer,targets,unfilledCount,selfFilled,
         ・他の社員さんの評価: <strong style="color:#0f172a">${completedTargets}/${targets.length}人</strong>分<br>
         ${unfilledCount>0?`・未回答: <strong style="color:#dc2626">${unfilledCount}項目</strong>(送信時はスキップされます)`:'・<strong style="color:#15803d">すべて回答済み</strong> ✅'}
       </div>
-      <div style="display:flex;gap:8px">
-        <button id="confirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">◀ 戻って修正</button>
-        <button id="confirm-send" class="btn btn-primary" style="flex:2;padding:14px;font-size:14px;box-shadow:0 4px 0 #1e293b">📤 はい、${reviewer.name}で送信</button>
+      <div style="display:flex;gap:8px;flex-direction:${unfilledCount>0?'column':'row'}">
+        <button id="confirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">${unfilledCount>0?'◀ 戻って未回答項目を採点する':'◀ 戻って修正'}</button>
+        <button id="confirm-send" class="btn" style="flex:${unfilledCount>0?'1':'2'};padding:14px;font-size:14px;${unfilledCount>0?'background:#dc2626;color:#fff;border-color:#7f1d1d;box-shadow:0 4px 0 #7f1d1d':'background:#fde047;color:#0f172a;box-shadow:0 4px 0 #1e293b'}">${unfilledCount>0?'⚠️ 未回答のまま送信する':`📤 はい、${reviewer.name}で送信`}</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -2357,10 +2371,17 @@ function showConfirmModal({type,reviewer,targets,unfilledCount,selfFilled,selfTo
   modal.innerHTML=`
     <div style="background:#fff;border:3px solid #1e293b;border-radius:16px;max-width:480px;width:100%;padding:18px;box-shadow:0 8px 0 #1e293b;max-height:90vh;overflow-y:auto">
       <div style="font-size:18px;font-weight:900;color:#0f172a;margin-bottom:12px;text-align:center">📤 送信前の最終確認</div>
+      ${unfilledCount>0?`<div style="background:linear-gradient(135deg,#fee2e2,#fecaca);border:3px solid #dc2626;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 3px 0 #991b1b">
+        <div style="font-size:14px;font-weight:900;color:#7f1d1d;margin-bottom:8px;text-align:center">⚠️ 未回答が ${unfilledCount} 項目あります</div>
+        <div style="font-size:12px;font-weight:700;color:#7f1d1d;line-height:1.6">
+          このまま送信すると、未回答項目は<strong>「評価なし」として記録されません</strong>。<br>
+          採点を続けるか、このまま送信するか、ご判断ください。
+        </div>
+      </div>`:''}
       ${inner}
-      <div style="display:flex;gap:8px">
-        <button id="confirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">◀ 戻って修正</button>
-        <button id="confirm-send" class="btn btn-primary" style="flex:2;padding:14px;font-size:14px;box-shadow:0 4px 0 #1e293b">📤 ${type==='staff'&&reviewer?'はい、'+reviewer.name+'で送信':'匿名で送信'}</button>
+      <div style="display:flex;gap:8px;flex-direction:${unfilledCount>0?'column':'row'}">
+        <button id="confirm-cancel" class="btn btn-ghost" style="flex:1;padding:14px;font-size:14px">${unfilledCount>0?'◀ 戻って未回答項目を採点する':'◀ 戻って修正'}</button>
+        <button id="confirm-send" class="btn" style="flex:${unfilledCount>0?'1':'2'};padding:14px;font-size:14px;${unfilledCount>0?'background:#dc2626;color:#fff;border-color:#7f1d1d;box-shadow:0 4px 0 #7f1d1d':'background:#fde047;color:#0f172a;box-shadow:0 4px 0 #1e293b'}">${unfilledCount>0?'⚠️ 未回答のまま送信する':`📤 ${type==='staff'&&reviewer?'はい、'+reviewer.name+'で送信':'匿名で送信'}`}</button>
       </div>
     </div>`;
 
