@@ -276,7 +276,7 @@ async function loadConfig() {
 async function loadStores() {
   try {
     const snap = await window.fb.getDocs(window.fb.query(window.fb.collection(window.fb.db, "stores"), window.fb.orderBy("order")));
-    S.stores = snap.docs.map(d => ({ ...d.data() }));
+    S.stores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (e) { console.error(e); showToast("店舗データの読み込みに失敗", true); }
 }
 
