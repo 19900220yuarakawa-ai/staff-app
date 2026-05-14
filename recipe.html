@@ -277,7 +277,7 @@ function newForm(base) {
   }
   return {
     name:'', recipeType:'normal', isSauce:false, season:'all', time:'', cost:'', price:'', method:'grill',
-    temp:'h', genre:null, creator:'', baseQty:1000, baseUnit:'g',
+    temp:'h', genre:null, creator:'', baseQty:1000, baseUnit:'g', servings:'',
     allergy:[], imgURL:null, imgFile:null,
     ingredients:[{name:'',value:null,unit:'g',linkTo:null}],
     steps:[{text:'',time:'',temp:'',note:'',photoURL:null,photoFile:null}],
@@ -480,6 +480,7 @@ async function saveRecipe(form, editorName) {
       price: form.price === '' || form.price === undefined ? null : parseFloat(form.price),
       temp: form.temp, genre: form.genre, creator: form.creator,
       baseQty: parseFloat(form.baseQty) || 1000, baseUnit: form.baseUnit,
+      servings: form.servings === '' || form.servings === undefined || form.servings === null ? null : parseFloat(form.servings),
       allergy: form.allergy || [], imgURL,
       ingredients: form.ingredients.filter(i => i.name && i.name.trim()).map(i => {
         const cleaned = { ...i };
@@ -1647,9 +1648,20 @@ ${x.imgURL?`<img src="${escapeHtml(x.imgURL)}" style="width:100%;height:200px;ob
 </div>
 <div style="background:#FAEEDA;border-radius:10px;padding:12px 14px;margin-bottom:14px">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-<div><p style="margin:0;font-size:11px;color:#854F0B;font-weight:500">⚖️ 仕込み量</p><p style="margin:2px 0 0;font-size:22px;font-weight:600;color:#412402">${fmtBase(tq, x.baseUnit||'g')}</p></div>
+<div><p style="margin:0;font-size:11px;color:#854F0B;font-weight:500">⚖️ 仕込み量${x.servings ? ` (${x.servings * sc}人前)` : ''}</p><p style="margin:2px 0 0;font-size:22px;font-weight:600;color:#412402">${fmtBase(tq, x.baseUnit||'g')}</p></div>
 <div class="scl"><button data-a="dec" ${sc<=0.5?'disabled':''}>−</button><span>×${sc}</span><button data-a="inc">＋</button></div>
 </div>
+${x.servings && x.servings > 0 ? `<div style="background:#fff8eb;border:0.5px solid #E5C893;border-radius:8px;padding:8px 10px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#854F0B">1人前あたりの量</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#412402">${fmtCost(x.baseQty / x.servings)}${escapeHtml(x.baseUnit||'g')}</p></div>
+${(() => {
+  const cost1x = calcRecipeCost(x, 1);
+  const costVal = cost1x.totalRaw || cost1x.total || 0;
+  if (costVal > 0) {
+    return `<div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">1人前あたりの原価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${fmtCost(costVal / x.servings)}</p></div>`;
+  }
+  return '<div></div>';
+})()}
+</div>` : ''}
 <div style="display:flex;gap:4px;flex-wrap:wrap">${[0.5,1,2,3,5,10].map(s=>`<button class="qb" data-a="set" data-x="${s}" style="background:${sc===s?'#854F0B':'#fff'};color:${sc===s?'#fff':'#854F0B'}">×${s}</button>`).join('')}</div>
 </div>
 ${(() => {
@@ -1661,13 +1673,16 @@ ${(() => {
   // ここではシンプルに「1倍時の売価 vs 1倍時の原価」で計算
   const cost1x = calcRecipeCost(x, 1);
   const cost1xVal = cost1x.totalRaw || cost1x.total || 0;
+  // 売価との比較は、人前があれば1人前あたりで、なければ仕込み全体で
+  const servings = x.servings && x.servings > 0 ? x.servings : 1;
+  const costPerServing = cost1xVal / servings;
   const price = x.price ? parseFloat(x.price) : null;
   let rate = null;
   let rateColor = '#085041';
   let rateBg = '#E1F5EE';
   let rateLabel = '';
-  if (price && price > 0 && cost1xVal > 0) {
-    rate = (cost1xVal / price) * 100;
+  if (price && price > 0 && costPerServing > 0) {
+    rate = (costPerServing / price) * 100;
     if (rate <= 30) { rateColor = '#085041'; rateBg = '#E1F5EE'; rateLabel = '🟢 良好'; }
     else if (rate <= 40) { rateColor = '#854F0B'; rateBg = '#FAEEDA'; rateLabel = '🟡 普通'; }
     else { rateColor = '#791F1F'; rateBg = '#FFEBE9'; rateLabel = '🔴 高め'; }
@@ -1678,7 +1693,7 @@ ${(() => {
 ${cost.unknown > 0 ? `<div style="text-align:right"><p style="margin:0;font-size:10px;color:#854F0B;font-weight:500">⚠️ 未登録 ${cost.unknown}件</p><p style="margin:2px 0 0;font-size:9px;color:#854F0B">登録済み食材で登録してください</p></div>` : ''}
 </div>
 ${price && rate !== null ? `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #5DCAA5;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-<div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">1食あたり原価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${fmtCost(cost1xVal)}</p></div>
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">1人前原価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${fmtCost(costPerServing)}</p></div>
 <div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">売価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${price.toLocaleString()}</p></div>
 <div style="text-align:center;background:${rateBg};border-radius:6px;padding:2px"><p style="margin:0;font-size:10px;color:${rateColor}">原価率</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:${rateColor}">${rate.toFixed(1)}% ${rateLabel}</p></div>
 </div>` : ''}
@@ -1786,7 +1801,26 @@ ${(f.recipeType||'normal')==='normal'?`<label class="lb">調理方法</label>
 <label class="lb">温度</label>
 <div style="display:flex;gap:5px;flex-wrap:wrap">${TEMPS.map(t=>`<button class="cb tmp ${t.i} ${f.temp===t.i?'on':''}" data-a="ftp" data-x="${t.i}">${t.ic} ${t.l}</button>`).join('')}</div>
 <label class="lb">基準仕込み量</label>
-<div style="display:flex;gap:8px;align-items:center"><input class="fi" type="number" data-f="baseQty" value="${f.baseQty}" style="flex:1"><div class="tog"><button class="${f.baseUnit==='g'?'on':''}" data-a="fbu" data-x="g">g</button><button class="${f.baseUnit==='ml'?'on':''}" data-a="fbu" data-x="ml">ml</button></div></div>
+<div style="display:flex;gap:8px;align-items:center"><input class="fi" type="number" data-f="baseQty" value="${f.baseQty}" style="flex:1;margin-bottom:0"><div class="tog"><button class="${f.baseUnit==='g'?'on':''}" data-a="fbu" data-x="g">g</button><button class="${f.baseUnit==='ml'?'on':''}" data-a="fbu" data-x="ml">ml</button></div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+<div><label class="lb">人前</label><div style="display:flex;align-items:center;gap:4px"><input class="fi" type="number" step="1" min="1" data-f="servings" value="${f.servings===undefined||f.servings===null||f.servings===''?'':f.servings}" placeholder="例: 5" style="margin-bottom:0"><span style="font-size:13px;color:#666;flex-shrink:0">人前</span></div></div>
+<div><label class="lb">1人前あたり</label>${(() => {
+  const baseQty = parseFloat(f.baseQty) || 0;
+  const servings = parseFloat(f.servings) || 0;
+  const tempRecipe = { ingredients: f.ingredients || [] };
+  const cost = calcRecipeCost(tempRecipe, 1);
+  const costVal = cost.totalRaw || cost.total || 0;
+  if (servings <= 0 || baseQty <= 0) {
+    return `<div class="fi" style="display:flex;align-items:center;background:#fafafa;border-color:#ddd;padding:8px 12px;color:#999;font-size:12px;margin-bottom:0">人前を入力</div>`;
+  }
+  const perQty = baseQty / servings;
+  const perCost = costVal > 0 ? costVal / servings : null;
+  return `<div class="fi" style="display:flex;align-items:center;justify-content:space-between;background:#FAEEDA;border-color:#E5C893;padding:8px 12px;color:#854F0B;font-weight:600;font-size:13px;margin-bottom:0">
+<span>${fmtCost(perQty)}${escapeHtml(f.baseUnit||'g')}</span>
+${perCost !== null ? `<span style="color:#085041">¥${fmtCost(perCost)}</span>` : ''}
+</div>`;
+})()}</div>
+</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="lb">調理時間</label><input class="fi" data-f="time" value="${escapeHtml(f.time)}" placeholder="25分"></div><div><label class="lb">原価（自動計算）</label>${(() => {
   // 材料から原価合計を計算
   const tempRecipe = { ingredients: f.ingredients || [] };
@@ -1795,20 +1829,22 @@ ${(f.recipeType||'normal')==='normal'?`<label class="lb">調理方法</label>
   return `<div class="fi" style="display:flex;align-items:center;background:${hasItems?'#E1F5EE':'#fafafa'};border-color:${hasItems?'#5DCAA5':'#ddd'};padding:8px 12px;color:${hasItems?'#085041':'#999'};font-weight:${hasItems?'600':'400'};font-size:14px">${hasItems ? `¥${fmtCost(cost.totalRaw||cost.total)}` : '材料に登録済み食材を連動させると自動表示'}</div>`;
 })()}</div></div>
 ${(() => {
-  // 売価・原価率の計算
+  // 売価・原価率の計算（人前があれば1人前原価で）
   const tempRecipe = { ingredients: f.ingredients || [] };
   const cost = calcRecipeCost(tempRecipe, 1);
   const costVal = cost.totalRaw || cost.total || 0;
+  const servings = parseFloat(f.servings) > 0 ? parseFloat(f.servings) : 1;
+  const costPerServing = costVal / servings;
   const price = parseFloat(f.price);
   const hasPrice = !isNaN(price) && price > 0;
-  const hasCost = costVal > 0;
+  const hasCost = costPerServing > 0;
   let rate = null;
   let rateColor = '#999';
   let rateBg = '#fafafa';
   let rateBorder = '#ddd';
   let rateLabel = '';
   if (hasPrice && hasCost) {
-    rate = (costVal / price) * 100;
+    rate = (costPerServing / price) * 100;
     if (rate <= 30) { rateColor = '#085041'; rateBg = '#E1F5EE'; rateBorder = '#5DCAA5'; rateLabel = '🟢 良好'; }
     else if (rate <= 40) { rateColor = '#854F0B'; rateBg = '#FAEEDA'; rateBorder = '#E5C893'; rateLabel = '🟡 普通'; }
     else { rateColor = '#791F1F'; rateBg = '#FFEBE9'; rateBorder = '#F7C1C1'; rateLabel = '🔴 高め'; }
@@ -2447,6 +2483,16 @@ function bind() {
       else if (f==='price') {
         S.form.price = el.value === '' ? '' : parseFloat(el.value);
         // 原価率の表示を更新（フォーカス維持）
+        clearTimeout(S.costUpdateTimer);
+        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 300);
+      }
+      else if (f==='servings') {
+        S.form.servings = el.value === '' ? '' : parseFloat(el.value);
+        clearTimeout(S.costUpdateTimer);
+        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 300);
+      }
+      else if (f==='baseQty') {
+        S.form.baseQty = el.value === '' ? '' : parseFloat(el.value);
         clearTimeout(S.costUpdateTimer);
         S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 300);
       }
