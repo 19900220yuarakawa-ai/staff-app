@@ -218,6 +218,8 @@ const S = {
   ingCatForm: null,
   ingMatchModal: null,
   bulkIngRows: null,
+  bulkFilter: 'all',
+  bulkSearch: '',
   acIngIdx: null,
   showIngListModal: false
 };
@@ -1399,6 +1401,27 @@ ${isEdit?`<button class="btn-out" data-a="del-ing-from-edit" data-x="${S.ingEdit
 </div>`;
 }
 
+function filterBulkRows(rows) {
+  return rows.filter(r => {
+    // ジャンルフィルター
+    if (S.bulkFilter && S.bulkFilter !== 'all') {
+      if (S.bulkFilter === 'none') {
+        if (r.category) return false;
+      } else {
+        if (r.category !== S.bulkFilter) return false;
+      }
+    }
+    // 検索フィルター
+    if (S.bulkSearch && S.bulkSearch.trim()) {
+      const q = S.bulkSearch.trim().toLowerCase();
+      const inName = (r.name || '').toLowerCase().includes(q);
+      const inSupplier = (r.supplier || '').toLowerCase().includes(q);
+      if (!inName && !inSupplier) return false;
+    }
+    return true;
+  });
+}
+
 function renderBulkIng() {
   const rows = S.bulkIngRows || [];
   return `
@@ -1429,8 +1452,31 @@ function renderBulkIng() {
 
 <textarea id="bulk-paste-area" placeholder="ここをタップしてからスプレッドシートのデータを貼り付け (Ctrl+V)&#10;&#10;例:&#10;肉&#9;鶏もも肉&#9;g&#9;1000&#9;1500&#9;A社&#10;野菜&#9;キャベツ&#9;g&#9;1000&#9;300&#9;B商事" style="width:100%;min-height:80px;padding:10px;border:2px dashed #5DCAA5;border-radius:8px;background:#fafefb;font-family:monospace;font-size:11px;margin-bottom:14px;resize:vertical"></textarea>
 
+<div style="background:#fafafa;border:0.5px solid #ddd;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+<span style="font-size:11px;color:#666;flex-shrink:0">🔍 検索:</span>
+<input class="fi" data-bulk-search="1" value="${escapeHtml(S.bulkSearch||'')}" placeholder="食材名で検索" style="margin-bottom:0;padding:6px 8px;font-size:12px;flex:1">
+</div>
+<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+<span style="font-size:11px;color:#666;margin-right:4px">ジャンル:</span>
+<button data-a="bulk-filter" data-x="all" style="background:${S.bulkFilter==='all'?'#085041':'#fff'};color:${S.bulkFilter==='all'?'#fff':'#085041'};border:1px solid #5DCAA5;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">すべて</button>
+${S.ingCategories.map(c => {
+  const count = (S.bulkIngRows || []).filter(r => r.category === c.name).length;
+  return `<button data-a="bulk-filter" data-x="${escapeHtml(c.name)}" style="background:${S.bulkFilter===c.name?'#085041':'#fff'};color:${S.bulkFilter===c.name?'#fff':'#085041'};border:1px solid #5DCAA5;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">${escapeHtml(c.name)}${count>0?` (${count})`:''}</button>`;
+}).join('')}
+${(() => {
+  // 未分類数
+  const noneCount = (S.bulkIngRows || []).filter(r => !r.category).length;
+  return noneCount > 0 ? `<button data-a="bulk-filter" data-x="none" style="background:${S.bulkFilter==='none'?'#666':'#fff'};color:${S.bulkFilter==='none'?'#fff':'#666'};border:1px solid #ccc;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">未分類 (${noneCount})</button>` : '';
+})()}
+</div>
+</div>
+
 <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-<p style="margin:0;font-size:13px;font-weight:500">食材一覧 (${rows.length}件)</p>
+<p style="margin:0;font-size:13px;font-weight:500">食材一覧 ${(() => {
+  const filtered = filterBulkRows(rows);
+  return rows.length === filtered.length ? `(${rows.length}件)` : `<span style="color:#085041">(${filtered.length}/${rows.length}件)</span>`;
+})()}</p>
 <button class="nv" data-a="bulk-add-row" style="color:#085041;font-size:12px">＋ 行を追加</button>
 </div>
 
@@ -1449,7 +1495,15 @@ function renderBulkIng() {
 </tr>
 </thead>
 <tbody>
-${rows.map((r, idx) => {
+${(() => {
+  // 元のindexを保持しつつフィルター
+  const indexedRows = rows.map((r, idx) => ({ ...r, _idx: idx }));
+  const filteredRows = filterBulkRows(indexedRows);
+  if (filteredRows.length === 0 && rows.length > 0) {
+    return `<tr><td colspan="8" style="padding:20px;text-align:center;color:#999;font-size:12px">条件に一致する食材がありません<br><button data-a="bulk-clear-filter" style="background:none;border:none;color:#0C447C;font-size:11px;cursor:pointer;text-decoration:underline;margin-top:4px">フィルターを解除</button></td></tr>`;
+  }
+  return filteredRows.map((r) => {
+  const idx = r._idx;
   const q = parseFloat(r.purchaseQty);
   const p = parseFloat(r.purchasePrice);
   const unitCost = (!isNaN(q) && q > 0 && !isNaN(p) && p >= 0) ? (p / q) : null;
@@ -1470,7 +1524,8 @@ ${r.category && !S.ingCategories.find(c => c.name === r.category) ? `<option val
 <td style="padding:0"><input class="bulk-cell" data-bulk-f="supplier" data-bulk-i="${idx}" value="${escapeHtml(r.supplier||'')}" placeholder="A社" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none"></td>
 <td style="padding:0;text-align:center"><button data-a="bulk-del-row" data-x="${idx}" style="background:none;border:none;color:#E24B4A;font-size:16px;cursor:pointer;padding:4px">×</button></td>
 </tr>`;
-}).join('')}
+}).join('');
+})()}
 </tbody>
 </table>
 </div>
@@ -2077,6 +2132,9 @@ function bind() {
         render();
       }
       else if (a === 'bulk-ing') {
+        // フィルター・検索をリセット
+        S.bulkFilter = 'all';
+        S.bulkSearch = '';
         // 既存の食材データを表に展開
         S.bulkIngRows = S.ingredients.map(ing => {
           const cat = S.ingCategories.find(c => c.id === ing.categoryId);
@@ -2104,6 +2162,15 @@ function bind() {
       else if (a === 'bulk-add-row') {
         if (!S.bulkIngRows) S.bulkIngRows = [];
         S.bulkIngRows.push({ category:'', name:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' });
+        render();
+      }
+      else if (a === 'bulk-filter') {
+        S.bulkFilter = v;
+        render();
+      }
+      else if (a === 'bulk-clear-filter') {
+        S.bulkFilter = 'all';
+        S.bulkSearch = '';
         render();
       }
       else if (a === 'bulk-del-row') {
@@ -2469,6 +2536,32 @@ function bind() {
               render();
             }
           }
+        }
+      }, 200);
+    };
+  });
+  // 一括編集の検索ボックス
+  root.querySelectorAll('[data-bulk-search]').forEach(el => {
+    let composing = false;
+    el.addEventListener('compositionstart', () => { composing = true; });
+    el.addEventListener('compositionend', () => { 
+      composing = false; 
+      S.bulkSearch = el.value;
+      clearTimeout(S.bulkSearchTimer);
+      S.bulkSearchTimer = setTimeout(() => render(), 200);
+    });
+    el.oninput = () => {
+      if (composing) return;
+      S.bulkSearch = el.value;
+      clearTimeout(S.bulkSearchTimer);
+      S.bulkSearchTimer = setTimeout(() => {
+        // フォーカス保持して再描画
+        const pos = el.selectionStart;
+        render();
+        const newEl = document.querySelector('[data-bulk-search]');
+        if (newEl) {
+          newEl.focus();
+          try { newEl.setSelectionRange(pos, pos); } catch(e) {}
         }
       }, 200);
     };
