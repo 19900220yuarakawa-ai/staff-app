@@ -1678,6 +1678,31 @@ ${(() => {
 <button class="nv" data-a="bulk-add-row" style="color:#085041;font-size:12px">＋ 行を追加</button>
 </div>
 
+${(() => {
+  // 重複サマリー
+  const nameCount = {};
+  rows.forEach(r => {
+    if (r.name && r.name.trim()) {
+      const n = r.name.trim();
+      nameCount[n] = (nameCount[n] || 0) + 1;
+    }
+  });
+  const dupInTable = Object.entries(nameCount).filter(([_, c]) => c > 1).map(([n]) => n);
+  const existingNames = S.ingredients.map(i => i.name);
+  const dupWithExisting = [...new Set(
+    rows.filter(r => r.name && r.name.trim() && !r.id && existingNames.includes(r.name.trim()))
+        .map(r => r.name.trim())
+  )];
+  
+  if (dupInTable.length === 0 && dupWithExisting.length === 0) return '';
+  
+  return `<div style="background:#FFEBE9;border:1px solid #F7C1C1;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+<p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#791F1F">⚠️ 重複が見つかりました（赤色の行）</p>
+${dupInTable.length > 0 ? `<p style="margin:0;font-size:11px;color:#791F1F;line-height:1.4">表内で名前が重複: <strong>${dupInTable.slice(0, 5).join('、')}${dupInTable.length > 5 ? `...他${dupInTable.length-5}件` : ''}</strong></p>` : ''}
+${dupWithExisting.length > 0 ? `<p style="margin:0;font-size:11px;color:#791F1F;line-height:1.4">既に登録済み: <strong>${dupWithExisting.slice(0, 5).join('、')}${dupWithExisting.length > 5 ? `...他${dupWithExisting.length-5}件` : ''}</strong></p>` : ''}
+</div>`;
+})()}
+
 <div style="overflow-x:auto;border:0.5px solid #ddd;border-radius:8px">
 <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:820px">
 <thead>
@@ -1697,22 +1722,43 @@ ${(() => {
 ${(() => {
   // 元のindexを保持しつつフィルター
   const indexedRows = rows.map((r, idx) => ({ ...r, _idx: idx }));
+  
+  // 重複検出のための名前マップ
+  const nameCount = {};
+  rows.forEach(r => {
+    if (r.name && r.name.trim()) {
+      const n = r.name.trim();
+      nameCount[n] = (nameCount[n] || 0) + 1;
+    }
+  });
+  // 既存食材の名前リスト
+  const existingNames = S.ingredients.map(i => i.name);
+  
   const filteredRows = filterBulkRows(indexedRows);
   if (filteredRows.length === 0 && rows.length > 0) {
-    return `<tr><td colspan="8" style="padding:20px;text-align:center;color:#999;font-size:12px">条件に一致する食材がありません<br><button data-a="bulk-clear-filter" style="background:none;border:none;color:#0C447C;font-size:11px;cursor:pointer;text-decoration:underline;margin-top:4px">フィルターを解除</button></td></tr>`;
+    return `<tr><td colspan="9" style="padding:20px;text-align:center;color:#999;font-size:12px">条件に一致する食材がありません<br><button data-a="bulk-clear-filter" style="background:none;border:none;color:#0C447C;font-size:11px;cursor:pointer;text-decoration:underline;margin-top:4px">フィルターを解除</button></td></tr>`;
   }
   return filteredRows.map((r) => {
   const idx = r._idx;
   const q = parseFloat(r.purchaseQty);
   const p = parseFloat(r.purchasePrice);
   const unitCost = (!isNaN(q) && q > 0 && !isNaN(p) && p >= 0) ? (p / q) : null;
-  return `<tr style="border-bottom:0.5px solid #eee">
+  // 重複判定
+  const nm = r.name ? r.name.trim() : '';
+  const dupInTable = nm && nameCount[nm] > 1;
+  const dupWithExisting = nm && !r.id && existingNames.includes(nm);
+  const isDup = dupInTable || dupWithExisting;
+  const dupTitle = dupInTable ? '⚠️ 表内に同じ名前が複数あります' : dupWithExisting ? '⚠️ 既に登録済みの食材です' : '';
+  return `<tr style="border-bottom:0.5px solid #eee;${isDup?'background:#FFEBE9':''}" ${isDup?`title="${dupTitle}"`:''}>
 <td style="padding:0"><select class="bulk-cell" data-bulk-f="category" data-bulk-i="${idx}" style="width:100%;padding:8px 4px;border:none;background:transparent;font-size:11px;outline:none;cursor:pointer">
 <option value="" ${!r.category?'selected':''}>（未選択）</option>
 ${S.ingCategories.map(c => `<option value="${escapeHtml(c.name)}" ${r.category===c.name?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}
 ${r.category && !S.ingCategories.find(c => c.name === r.category) ? `<option value="${escapeHtml(r.category)}" selected>＋ ${escapeHtml(r.category)}（新規）</option>` : ''}
 </select></td>
-<td style="padding:0"><input class="bulk-cell" data-bulk-f="name" data-bulk-i="${idx}" value="${escapeHtml(r.name||'')}" placeholder="鶏もも肉" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none"></td>
+<td style="padding:0;position:relative">
+${isDup ? `<span style="position:absolute;top:2px;right:2px;background:#791F1F;color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;font-weight:600;pointer-events:none">重複</span>` : ''}
+<input class="bulk-cell" data-bulk-f="name" data-bulk-i="${idx}" value="${escapeHtml(r.name||'')}" placeholder="鶏もも肉" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none;${isDup?'color:#791F1F;font-weight:600':''}">
+</td>
 <td style="padding:0"><input class="bulk-cell" data-bulk-f="productName" data-bulk-i="${idx}" value="${escapeHtml(r.productName||'')}" placeholder="ブランド鶏 国産モモ2kg" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none;color:#0C447C"></td>
 <td style="padding:0"><select class="bulk-cell" data-bulk-f="unit" data-bulk-i="${idx}" style="width:100%;padding:8px 4px;border:none;background:transparent;font-size:11px;outline:none;cursor:pointer">
 <option value="g" ${(r.unit||'g')==='g'?'selected':''}>g</option>
@@ -2990,8 +3036,46 @@ function bind() {
       const existing = (S.bulkIngRows || []).filter(r => r.name || r.category || r.purchasePrice);
       S.bulkIngRows = [...existing, ...newRows];
       pasteArea.value = '';
-      showToast(`${newRows.length}行を貼り付けました`);
+      
+      // 重複チェック（即座にユーザーに知らせる）
+      const nameMap = {};
+      S.bulkIngRows.forEach(r => {
+        if (r.name && r.name.trim()) {
+          const n = r.name.trim();
+          nameMap[n] = (nameMap[n] || 0) + 1;
+        }
+      });
+      const dupesInTable = Object.entries(nameMap).filter(([_, c]) => c > 1).map(([n]) => n);
+      
+      // 既存食材との重複（新規行のみ）
+      const existingNames = S.ingredients.map(i => i.name);
+      const dupesWithExisting = newRows
+        .filter(r => r.name && r.name.trim() && existingNames.includes(r.name.trim()))
+        .map(r => r.name.trim());
+      const uniqueDupesWithExisting = [...new Set(dupesWithExisting)];
+      
+      let msg = `${newRows.length}行を貼り付けました`;
+      if (dupesInTable.length > 0 || uniqueDupesWithExisting.length > 0) {
+        msg = `${newRows.length}行を貼り付け（⚠️重複あり）`;
+      }
+      showToast(msg, dupesInTable.length > 0 || uniqueDupesWithExisting.length > 0);
+      
       render();
+      
+      // 重複があれば、貼り付け直後にアラートで詳細を見せる
+      if (dupesInTable.length > 0 || uniqueDupesWithExisting.length > 0) {
+        setTimeout(() => {
+          let alertMsg = '⚠️ 同じ名前の食材が見つかりました\n\n';
+          if (dupesInTable.length > 0) {
+            alertMsg += `【表内で重複】(同じ名前が複数行)\n・${dupesInTable.join('\n・')}\n\n`;
+          }
+          if (uniqueDupesWithExisting.length > 0) {
+            alertMsg += `【既存と重複】(すでに登録済み)\n・${uniqueDupesWithExisting.join('\n・')}\n\n`;
+          }
+          alertMsg += '赤くハイライトされた行を確認してください。\n保存時にも再度確認します。';
+          alert(alertMsg);
+        }, 300);
+      }
     };
   }
 }
