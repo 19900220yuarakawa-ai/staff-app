@@ -33,8 +33,12 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .gb{font-size:10px;padding:2px 7px;border-radius:999px;font-weight:500;background:#E1F5EE;color:#085041}
 .btn-p{padding:14px;background:#000;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
 .btn-out{padding:14px;background:#fff;color:#000;border:0.5px solid #ddd;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%}
-.fi{width:100%;padding:10px 12px;font-size:14px;border:0.5px solid #ddd;border-radius:8px;background:#fff;font-family:inherit}
+.fi{width:100%;padding:10px 12px;font-size:14px;border:0.5px solid #ddd;border-radius:8px;background:#fff;font-family:inherit;color:#1a1a1a}
 .fi:focus{outline:none;border-color:#000}
+.fi::placeholder{color:#bbb}
+input[type=number].fi{-moz-appearance:textfield;text-align:left}
+input[type=number].fi::-webkit-outer-spin-button,
+input[type=number].fi::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .lb{display:block;font-size:12px;font-weight:500;color:#666;margin:14px 0 6px}
 .cb{padding:6px 10px;font-size:12px;border:0.5px solid #ddd;background:#fff;border-radius:999px;cursor:pointer}
 .cb.on{background:#FCEBEB;border-color:#F7C1C1;color:#791F1F}
@@ -835,6 +839,7 @@ function render() {
   else if (S.sc === 'admin') h = renderAdmin();
   else if (S.sc === 'ing-edit') h = renderIngEdit();
   else if (S.sc === 'bulk-ing') h = renderBulkIng();
+  else if (S.sc === 'ing-manage') h = renderIngManage();
   else if (S.sc === 'warning') h = renderWarning();
   else if (S.sc === 'stores') h = renderStores();
   else if (S.sc === 'menu') h = renderMenu();
@@ -949,72 +954,14 @@ ${(() => {
 </div>
 
 <h3 style="font-size:14px;font-weight:500;margin:0 0 10px">🥕 登録済み食材・原価管理</h3>
-<div style="background:#fff;border:0.5px solid #ddd;border-radius:10px;padding:14px;margin-bottom:20px">
-<p style="margin:0 0 12px;font-size:11px;color:#666;line-height:1.5">食材の原価を登録するとレシピの原価が自動計算されます。<br>登録した食材名とレシピの材料名が一致すると自動で結びつきます。</p>
-
-<details style="margin-bottom:12px">
-<summary style="cursor:pointer;font-size:12px;font-weight:500;color:#854F0B;padding:6px 0">📂 ジャンル管理 (${S.ingCategories.length}件)</summary>
-<div style="background:#fafafa;padding:10px;border-radius:8px;margin-top:6px">
-${S.ingCategories.map(c=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border-radius:6px;margin-bottom:4px;border:0.5px solid #ddd">
-<span style="flex:1;font-size:12px">${escapeHtml(c.name)}</span>
-<button class="nv" data-a="del-ing-cat" data-x="${c.id}" style="color:#791F1F;font-size:11px">削除</button>
-</div>`).join('')}
-<div style="display:flex;gap:6px;margin-top:8px">
-<input class="fi" data-f="new-ing-cat" value="${escapeHtml(S.ingCatForm||'')}" placeholder="新しいジャンル名" style="flex:1;font-size:12px;padding:6px 10px">
-<button class="btn-p" data-a="add-ing-cat" style="background:#854F0B;width:auto;padding:6px 14px;font-size:12px">追加</button>
-</div>
-</div>
-</details>
-
-<div style="display:flex;gap:8px;margin-bottom:12px">
-<button class="btn-p" data-a="add-ing" style="background:#085041;flex:1">＋ 1つずつ登録</button>
-<button class="btn-p" data-a="bulk-ing" style="background:#0C447C;flex:1">📊 一括編集</button>
-</div>
-
-${S.ingredients.length === 0 ? `
-<div style="text-align:center;padding:20px;color:#999;font-size:12px">
-まだ食材が登録されていません<br>上のボタンから登録してください
-</div>
-` : `
-<div style="font-size:11px;color:#666;margin-bottom:8px">登録食材一覧 (${S.ingredients.length}件)</div>
-${S.ingCategories.map(cat => {
-  const ings = S.ingredients.filter(i => i.categoryId === cat.id);
-  if (ings.length === 0) return '';
-  return `<div style="margin-bottom:10px">
-<div style="font-size:11px;font-weight:600;color:#854F0B;margin-bottom:4px">${escapeHtml(cat.name)} (${ings.length})</div>
-${ings.map(ing => `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fafafa;border-radius:6px;margin-bottom:4px;border:0.5px solid #eee">
+<button data-a="open-ing-manage" style="width:100%;background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin-bottom:20px;cursor:pointer;font-family:inherit;text-align:left;display:flex;align-items:center;gap:14px">
+<div style="width:48px;height:48px;background:#FAEEDA;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🥕</div>
 <div style="flex:1;min-width:0">
-<div style="font-size:12px;font-weight:500">${escapeHtml(ing.name)}</div>
-<div style="font-size:10px;color:#666;margin-top:2px;line-height:1.4">
-${ing.purchaseQty && ing.purchasePrice ? `<span style="color:#854F0B">仕入: ${ing.purchaseQty}${escapeHtml(ing.unit)} / ¥${ing.purchasePrice.toLocaleString()}</span><br>` : ''}
-<span>1${escapeHtml(ing.unit)}あたり ¥${fmtCost(ing.cost)}${ing.supplier?` ・ ${escapeHtml(ing.supplier)}`:''}</span>
+<div style="font-size:14px;font-weight:600;color:#412402;margin-bottom:4px">食材管理ページを開く</div>
+<div style="font-size:11px;color:#666;line-height:1.4">${S.ingredients.length}件登録中 ・ ${S.ingCategories.length}ジャンル<br>検索・絞り込み・編集ができます</div>
 </div>
-</div>
-<button class="nv" data-a="edit-ing" data-x="${ing.id}" style="color:#0C447C;font-size:11px;flex-shrink:0">編集</button>
-<button class="nv" data-a="del-ing" data-x="${ing.id}" style="color:#791F1F;font-size:11px;flex-shrink:0">削除</button>
-</div>`).join('')}
-</div>`;
-}).join('')}
-${(() => {
-  const uncat = S.ingredients.filter(i => !i.categoryId || !S.ingCategories.find(c=>c.id===i.categoryId));
-  if (uncat.length === 0) return '';
-  return `<div style="margin-bottom:10px">
-<div style="font-size:11px;font-weight:600;color:#999;margin-bottom:4px">未分類 (${uncat.length})</div>
-${uncat.map(ing => `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fafafa;border-radius:6px;margin-bottom:4px;border:0.5px solid #eee">
-<div style="flex:1;min-width:0">
-<div style="font-size:12px;font-weight:500">${escapeHtml(ing.name)}</div>
-<div style="font-size:10px;color:#666;margin-top:2px;line-height:1.4">
-${ing.purchaseQty && ing.purchasePrice ? `<span style="color:#854F0B">仕入: ${ing.purchaseQty}${escapeHtml(ing.unit)} / ¥${ing.purchasePrice.toLocaleString()}</span><br>` : ''}
-<span>1${escapeHtml(ing.unit)}あたり ¥${fmtCost(ing.cost)}${ing.supplier?` ・ ${escapeHtml(ing.supplier)}`:''}</span>
-</div>
-</div>
-<button class="nv" data-a="edit-ing" data-x="${ing.id}" style="color:#0C447C;font-size:11px;flex-shrink:0">編集</button>
-<button class="nv" data-a="del-ing" data-x="${ing.id}" style="color:#791F1F;font-size:11px;flex-shrink:0">削除</button>
-</div>`).join('')}
-</div>`;
-})()}
-`}
-</div>
+<div style="color:#999;font-size:20px;flex-shrink:0">›</div>
+</button>
 
 ${(() => {
   const bs = getBackupStatus();
@@ -1185,10 +1132,27 @@ async function saveIngredient() {
   }
   const costPerUnit = price / qty;
   console.log('[saveIngredient] バリデーション通過 costPerUnit=', costPerUnit);
+  
+  // 重複チェック（編集中の自分自身は除く）
+  const trimmedName = f.name.trim();
+  const duplicate = S.ingredients.find(ing => 
+    ing.name === trimmedName && ing.id !== S.ingEditIdx
+  );
+  if (duplicate) {
+    const cat = S.ingCategories.find(c => c.id === duplicate.categoryId);
+    const dupInfo = `【既存の食材】\n名前: ${duplicate.name}\n${duplicate.productName ? `商品名: ${duplicate.productName}\n` : ''}ジャンル: ${cat ? cat.name : '未分類'}\n仕入: ${duplicate.purchaseQty}${duplicate.unit} / ¥${duplicate.purchasePrice ? duplicate.purchasePrice.toLocaleString() : '-'}\n${duplicate.supplier ? `仕入先: ${duplicate.supplier}` : ''}`;
+    const msg = `⚠️ 同じ名前の食材が既に登録されています。\n\n${dupInfo}\n\nそれでも新規登録しますか？\n\n(同じ名前で登録すると、レシピでどちらが連動するか不明確になります)`;
+    if (!confirm(msg)) {
+      console.log('[saveIngredient] ユーザーが重複登録をキャンセル');
+      return;
+    }
+  }
+  
   S.loading = true; render();
   try {
     const data = {
       name: f.name.trim(),
+      productName: f.productName ? f.productName.trim() : '',
       categoryId: f.categoryId || '',
       unit: f.unit,
       purchaseQty: qty,
@@ -1212,7 +1176,7 @@ async function saveIngredient() {
     }
     S.ingForm = null;
     S.ingEditIdx = null;
-    S.sc = 'admin';
+    S.sc = S.ingReturnTo || 'admin';
   } catch (e) {
     console.error('[saveIngredient] エラー:', e);
     showToast("保存失敗: " + e.message, true);
@@ -1276,6 +1240,31 @@ async function saveBulkIngredients() {
     return;
   }
   
+  // 重複チェック1: 表内に同じ名前が複数あるか
+  const nameCounts = {};
+  validRows.forEach(r => {
+    const n = r.name.trim();
+    nameCounts[n] = (nameCounts[n] || 0) + 1;
+  });
+  const dupInTable = Object.entries(nameCounts).filter(([_, c]) => c > 1).map(([n]) => n);
+  if (dupInTable.length > 0) {
+    if (!confirm(`⚠️ 表の中に同じ名前の食材があります:\n\n・${dupInTable.join('\n・')}\n\nそのまま保存しますか?`)) {
+      return;
+    }
+  }
+  
+  // 重複チェック2: 既存の食材と被るか（新規行のみ）
+  const existingNames = S.ingredients.map(i => i.name);
+  const dupWithExisting = validRows
+    .filter(r => !r.id) // 新規行のみチェック
+    .filter(r => existingNames.includes(r.name.trim()))
+    .map(r => r.name.trim());
+  if (dupWithExisting.length > 0) {
+    if (!confirm(`⚠️ 以下の食材は既に登録されています:\n\n・${dupWithExisting.join('\n・')}\n\n重複して新規登録しますか?\n\n(既存を更新したい場合は、新規行ではなく既存行を編集してください)`)) {
+      return;
+    }
+  }
+  
   if (!confirm(`${validRows.length}件の食材を保存します。よろしいですか?`)) return;
   
   S.loading = true; render();
@@ -1299,6 +1288,7 @@ async function saveBulkIngredients() {
       const cat = r.category ? S.ingCategories.find(ic => ic.name === r.category) : null;
       const data = {
         name: r.name.trim(),
+        productName: r.productName ? r.productName.trim() : '',
         categoryId: cat ? cat.id : '',
         unit: r.unit.trim(),
         purchaseQty: r.purchaseQty,
@@ -1323,7 +1313,7 @@ async function saveBulkIngredients() {
     
     showToast(`保存完了: 新規${addCount}件、更新${updateCount}件${newCatNames.length>0?`、新規ジャンル${newCatNames.length}件`:''}`);
     S.bulkIngRows = null;
-    S.sc = 'admin';
+    S.sc = S.ingReturnTo || 'admin';
   } catch (e) {
     console.error('[一括保存] エラー:', e);
     alert('保存中にエラーが発生しました:\n' + e.message);
@@ -1350,6 +1340,11 @@ function renderIngEdit() {
 
 <label class="lb">食材名 <span style="color:#791F1F">*</span></label>
 <input class="fi" data-f="im-name" value="${escapeHtml(f.name)}" placeholder="例: 鶏もも肉、醤油、卵">
+<p style="font-size:10px;color:#999;margin:-6px 0 8px;line-height:1.4">レシピで使う名前。シンプルな汎用名を推奨</p>
+
+<label class="lb">商品名（仕入れ管理用）</label>
+<input class="fi" data-f="im-product" value="${escapeHtml(f.productName||'')}" placeholder="例: ブランド鶏 国産モモ肉 2kg ◯◯印">
+<p style="font-size:10px;color:#999;margin:-6px 0 8px;line-height:1.4">実際の商品名や型番。一覧でのみ表示（レシピには反映されません）</p>
 
 <label class="lb">ジャンル</label>
 <select class="fi" data-f="im-category">
@@ -1423,6 +1418,207 @@ function filterBulkRows(rows) {
   });
 }
 
+function renderIngManage() {
+  // ジャンル別の色テーマ
+  const categoryColors = {
+    '肉':       { bg:'#FFEBE9', border:'#F7C1C1', accent:'#791F1F', emoji:'🥩' },
+    '魚':       { bg:'#E6F1FB', border:'#A8CDE9', accent:'#0C447C', emoji:'🐟' },
+    '野菜':     { bg:'#E8F5E9', border:'#A8D5AB', accent:'#085041', emoji:'🥬' },
+    '調味料':   { bg:'#FAEEDA', border:'#E5C893', accent:'#854F0B', emoji:'🧂' },
+    '冷凍':     { bg:'#E0F2F1', border:'#9FD5D2', accent:'#00695C', emoji:'❄️' },
+    '乾物':     { bg:'#F3E5D0', border:'#D7B98E', accent:'#5D4037', emoji:'🌾' },
+    'その他':   { bg:'#EEEDFE', border:'#C5C1F0', accent:'#3C3489', emoji:'📦' },
+    '果物':     { bg:'#FCE4EC', border:'#F0B6CD', accent:'#AD1457', emoji:'🍎' },
+    '乳製品':   { bg:'#FFF8E1', border:'#F0DC9F', accent:'#7D6608', emoji:'🥛' },
+    '卵':       { bg:'#FFF8E1', border:'#F0DC9F', accent:'#7D6608', emoji:'🥚' },
+    '穀物':     { bg:'#F3E5D0', border:'#D7B98E', accent:'#5D4037', emoji:'🍞' },
+    '麺類':     { bg:'#FFF3E0', border:'#F0CC91', accent:'#7D4E00', emoji:'🍜' },
+    '豆類':     { bg:'#E8EAF6', border:'#A5ADD4', accent:'#1A237E', emoji:'🫘' },
+    'ドリンク': { bg:'#E0F7FA', border:'#9FD6E0', accent:'#006064', emoji:'🥤' },
+    '酒類':     { bg:'#FFF3E0', border:'#F0CC91', accent:'#7D4E00', emoji:'🍶' },
+  };
+  const fallbackColors = [
+    { bg:'#E6F1FB', border:'#A8CDE9', accent:'#0C447C', emoji:'🏷️' },
+    { bg:'#FCE4EC', border:'#F0B6CD', accent:'#AD1457', emoji:'🏷️' },
+    { bg:'#EEEDFE', border:'#C5C1F0', accent:'#3C3489', emoji:'🏷️' },
+    { bg:'#E0F2F1', border:'#9FD5D2', accent:'#00695C', emoji:'🏷️' },
+    { bg:'#FFF3E0', border:'#F0CC91', accent:'#7D4E00', emoji:'🏷️' },
+  ];
+  const getColorTheme = (catName, catIdx) => {
+    return categoryColors[catName] || fallbackColors[catIdx % fallbackColors.length];
+  };
+  
+  // フィルター
+  const filterCat = S.ingMgrFilter || 'all';
+  const filterSupplier = S.ingMgrSupplierFilter || 'all';
+  const searchQuery = (S.ingMgrSearch || '').trim().toLowerCase();
+  
+  // 仕入先一覧
+  const suppliers = [...new Set(S.ingredients.map(i => i.supplier).filter(s => s))].sort();
+  
+  // フィルター適用
+  const filteredAll = S.ingredients.filter(ing => {
+    // ジャンルフィルター
+    if (filterCat !== 'all') {
+      if (filterCat === 'none') {
+        if (ing.categoryId && S.ingCategories.find(c => c.id === ing.categoryId)) return false;
+      } else {
+        const cat = S.ingCategories.find(c => c.id === ing.categoryId);
+        if (!cat || cat.name !== filterCat) return false;
+      }
+    }
+    // 仕入先フィルター
+    if (filterSupplier !== 'all') {
+      if (filterSupplier === 'none') {
+        if (ing.supplier) return false;
+      } else {
+        if (ing.supplier !== filterSupplier) return false;
+      }
+    }
+    // 検索
+    if (searchQuery) {
+      const n = (ing.name || '').toLowerCase();
+      const pn = (ing.productName || '').toLowerCase();
+      const sp = (ing.supplier || '').toLowerCase();
+      if (!n.includes(searchQuery) && !pn.includes(searchQuery) && !sp.includes(searchQuery)) return false;
+    }
+    return true;
+  });
+  
+  return `
+<div style="display:flex;align-items:center;padding:8px 14px;border-bottom:0.5px solid #ddd;background:#fff;position:sticky;top:0;z-index:10">
+<button class="nv" data-a="bs">✕</button>
+<p style="flex:1;text-align:center;margin:0;font-size:14px;font-weight:500">🥕 食材管理</p>
+<button class="nv" data-a="bulk-ing" style="color:#0C447C;font-weight:500;font-size:12px">📊 一括編集</button>
+</div>
+
+<div style="padding:14px 18px 80px">
+
+<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+<button class="btn-p" data-a="bulk-ing" style="background:#0C447C;width:100%;padding:14px;font-size:14px;font-weight:600">📊 Excelから一括登録・編集</button>
+<button data-a="add-ing" style="background:#fff;color:#085041;border:1px solid #5DCAA5;border-radius:8px;width:100%;padding:10px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500">＋ 1つずつ手動で登録</button>
+</div>
+
+<details style="margin-bottom:14px;background:#fff;border:0.5px solid #ddd;border-radius:8px;padding:10px 12px">
+<summary style="cursor:pointer;font-size:12px;font-weight:500;color:#854F0B">📂 ジャンル管理 (${S.ingCategories.length}件)</summary>
+<div style="background:#fafafa;padding:10px;border-radius:8px;margin-top:8px">
+${S.ingCategories.map(c=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border-radius:6px;margin-bottom:4px;border:0.5px solid #ddd">
+<span style="flex:1;font-size:12px">${escapeHtml(c.name)}</span>
+<button class="nv" data-a="del-ing-cat" data-x="${c.id}" style="color:#791F1F;font-size:11px">削除</button>
+</div>`).join('')}
+<div style="display:flex;gap:6px;margin-top:8px">
+<input class="fi" data-f="new-ing-cat" value="${escapeHtml(S.ingCatForm||'')}" placeholder="新しいジャンル名" style="flex:1;font-size:12px;padding:6px 10px">
+<button class="btn-p" data-a="add-ing-cat" style="background:#854F0B;width:auto;padding:6px 14px;font-size:12px">追加</button>
+</div>
+</div>
+</details>
+
+<div style="background:#fafafa;border:0.5px solid #ddd;border-radius:10px;padding:12px;margin-bottom:14px">
+<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+<span style="font-size:11px;color:#666;flex-shrink:0">🔍</span>
+<input class="fi" data-ingmgr-search="1" value="${escapeHtml(S.ingMgrSearch||'')}" placeholder="食材名・商品名・仕入先で検索" style="margin-bottom:0;padding:6px 10px;font-size:12px;flex:1">
+${searchQuery ? `<button data-a="ingmgr-clear-search" style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;flex-shrink:0">✕</button>` : ''}
+</div>
+
+<div style="margin-bottom:8px">
+<p style="margin:0 0 6px;font-size:11px;color:#854F0B;font-weight:500">ジャンル絞り込み</p>
+<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+<button data-a="ingmgr-filter-cat" data-x="all" style="background:${filterCat==='all'?'#085041':'#fff'};color:${filterCat==='all'?'#fff':'#085041'};border:1px solid #5DCAA5;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">すべて (${S.ingredients.length})</button>
+${S.ingCategories.map(c => {
+  const count = S.ingredients.filter(i => i.categoryId === c.id).length;
+  if (count === 0) return '';
+  return `<button data-a="ingmgr-filter-cat" data-x="${escapeHtml(c.name)}" style="background:${filterCat===c.name?'#085041':'#fff'};color:${filterCat===c.name?'#fff':'#085041'};border:1px solid #5DCAA5;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">${escapeHtml(c.name)} (${count})</button>`;
+}).join('')}
+${(() => {
+  const uncatCount = S.ingredients.filter(i => !i.categoryId || !S.ingCategories.find(c=>c.id===i.categoryId)).length;
+  return uncatCount > 0 ? `<button data-a="ingmgr-filter-cat" data-x="none" style="background:${filterCat==='none'?'#666':'#fff'};color:${filterCat==='none'?'#fff':'#666'};border:1px solid #ccc;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">未分類 (${uncatCount})</button>` : '';
+})()}
+</div>
+</div>
+
+${suppliers.length > 0 ? `<div>
+<p style="margin:0 0 6px;font-size:11px;color:#0C447C;font-weight:500">仕入先絞り込み</p>
+<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+<button data-a="ingmgr-filter-sup" data-x="all" style="background:${filterSupplier==='all'?'#0C447C':'#fff'};color:${filterSupplier==='all'?'#fff':'#0C447C'};border:1px solid #A8CDE9;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">すべて</button>
+${suppliers.map(sp => {
+  const count = S.ingredients.filter(i => i.supplier === sp).length;
+  return `<button data-a="ingmgr-filter-sup" data-x="${escapeHtml(sp)}" style="background:${filterSupplier===sp?'#0C447C':'#fff'};color:${filterSupplier===sp?'#fff':'#0C447C'};border:1px solid #A8CDE9;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">${escapeHtml(sp)} (${count})</button>`;
+}).join('')}
+${(() => {
+  const noneCount = S.ingredients.filter(i => !i.supplier).length;
+  return noneCount > 0 ? `<button data-a="ingmgr-filter-sup" data-x="none" style="background:${filterSupplier==='none'?'#666':'#fff'};color:${filterSupplier==='none'?'#fff':'#666'};border:1px solid #ccc;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">仕入先なし (${noneCount})</button>` : '';
+})()}
+</div>
+</div>` : ''}
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<p style="margin:0;font-size:12px;font-weight:500">登録食材一覧 ${filteredAll.length === S.ingredients.length ? `(${S.ingredients.length}件)` : `<span style="color:#085041">(${filteredAll.length}/${S.ingredients.length}件)</span>`}</p>
+${(filterCat !== 'all' || filterSupplier !== 'all' || searchQuery) ? `<button data-a="ingmgr-clear-all" style="background:none;border:none;color:#0C447C;font-size:11px;cursor:pointer;text-decoration:underline">フィルター解除</button>` : ''}
+</div>
+
+${S.ingredients.length === 0 ? `
+<div style="text-align:center;padding:30px 20px;color:#999;font-size:12px;background:#fafafa;border-radius:10px">
+まだ食材が登録されていません<br>上のボタンから登録してください
+</div>
+` : filteredAll.length === 0 ? `
+<div style="text-align:center;padding:30px 20px;color:#999;font-size:12px;background:#fafafa;border-radius:10px">
+条件に一致する食材がありません<br><button data-a="ingmgr-clear-all" style="background:none;border:none;color:#0C447C;font-size:11px;cursor:pointer;text-decoration:underline;margin-top:6px">フィルターを解除</button>
+</div>
+` : `
+${S.ingCategories.map((cat, catIdx) => {
+  const ings = filteredAll.filter(i => i.categoryId === cat.id);
+  if (ings.length === 0) return '';
+  const theme = getColorTheme(cat.name, catIdx);
+  return `<div style="margin-bottom:14px;background:${theme.bg};border:1px solid ${theme.border};border-radius:10px;padding:10px 12px">
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${theme.accent};display:flex;align-items:center;gap:6px">
+<span>${theme.emoji}</span>
+<span>${escapeHtml(cat.name)}</span>
+<span style="background:${theme.accent};color:#fff;font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px">${ings.length}</span>
+</p>
+${ings.map(ing => `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;border-radius:6px;margin-bottom:4px;border:0.5px solid ${theme.border}">
+<div style="flex:1;min-width:0">
+<div style="font-size:13px;font-weight:500;color:#000">${escapeHtml(ing.name)}</div>
+${ing.productName ? `<div style="font-size:10px;color:#0C447C;margin-top:1px;line-height:1.3">📦 ${escapeHtml(ing.productName)}</div>` : ''}
+<div style="font-size:10px;color:#666;margin-top:2px;line-height:1.4">
+${ing.purchaseQty && ing.purchasePrice ? `<span style="color:${theme.accent}">仕入: ${ing.purchaseQty}${escapeHtml(ing.unit)} / ¥${ing.purchasePrice.toLocaleString()}</span><br>` : ''}
+<span>1${escapeHtml(ing.unit)}あたり ¥${fmtCost(ing.cost)}${ing.supplier?` ・ ${escapeHtml(ing.supplier)}`:''}</span>
+</div>
+</div>
+<button class="nv" data-a="edit-ing" data-x="${ing.id}" style="color:#0C447C;font-size:11px;flex-shrink:0">編集</button>
+<button class="nv" data-a="del-ing" data-x="${ing.id}" style="color:#791F1F;font-size:11px;flex-shrink:0">削除</button>
+</div>`).join('')}
+</div>`;
+}).join('')}
+${(() => {
+  const uncat = filteredAll.filter(i => !i.categoryId || !S.ingCategories.find(c=>c.id===i.categoryId));
+  if (uncat.length === 0) return '';
+  return `<div style="margin-bottom:14px;background:#fafafa;border:1px solid #ddd;border-radius:10px;padding:10px 12px">
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#666;display:flex;align-items:center;gap:6px">
+<span>🏷️</span>
+<span>未分類</span>
+<span style="background:#999;color:#fff;font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px">${uncat.length}</span>
+</p>
+${uncat.map(ing => `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;border-radius:6px;margin-bottom:4px;border:0.5px solid #ddd">
+<div style="flex:1;min-width:0">
+<div style="font-size:13px;font-weight:500;color:#000">${escapeHtml(ing.name)}</div>
+${ing.productName ? `<div style="font-size:10px;color:#0C447C;margin-top:1px;line-height:1.3">📦 ${escapeHtml(ing.productName)}</div>` : ''}
+<div style="font-size:10px;color:#666;margin-top:2px;line-height:1.4">
+${ing.purchaseQty && ing.purchasePrice ? `<span style="color:#666">仕入: ${ing.purchaseQty}${escapeHtml(ing.unit)} / ¥${ing.purchasePrice.toLocaleString()}</span><br>` : ''}
+<span>1${escapeHtml(ing.unit)}あたり ¥${fmtCost(ing.cost)}${ing.supplier?` ・ ${escapeHtml(ing.supplier)}`:''}</span>
+</div>
+</div>
+<button class="nv" data-a="edit-ing" data-x="${ing.id}" style="color:#0C447C;font-size:11px;flex-shrink:0">編集</button>
+<button class="nv" data-a="del-ing" data-x="${ing.id}" style="color:#791F1F;font-size:11px;flex-shrink:0">削除</button>
+</div>`).join('')}
+</div>`;
+})()}
+`}
+
+</div>
+`;
+}
+
 function renderBulkIng() {
   const rows = S.bulkIngRows || [];
   return `
@@ -1437,10 +1633,11 @@ function renderBulkIng() {
 <div style="background:#E6F1FB;border-radius:10px;padding:12px 14px;margin-bottom:14px">
 <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#0C447C">📋 使い方</p>
 <p style="margin:0;font-size:11px;color:#0C447C;line-height:1.6">
-① Excelやスプレッドシートで <strong>「ジャンル | 食材名 | 単位 | 仕入量 | 仕入値 | 仕入先」</strong> の順で並べる<br>
-② 6列を選択してコピー（Ctrl+C）<br>
+① Excelやスプレッドシートで <strong>「ジャンル | 食材名 | 商品名 | 単位 | 仕入量 | 仕入値 | 仕入先」</strong> の順で並べる<br>
+② 7列を選択してコピー（Ctrl+C）<br>
 ③ 下の貼り付けエリアをクリックして貼り付け（Ctrl+V）<br>
-④ 自動で表が埋まる → 「一括保存」をタップ
+④ 自動で表が埋まる → 「一括保存」をタップ<br>
+<span style="color:#666">※商品名は空欄でもOK / 旧形式の6列（商品名なし）にも自動対応</span>
 </p>
 </div>
 
@@ -1448,10 +1645,10 @@ function renderBulkIng() {
 💡 仕入量と仕入値から「1単位あたり原価」が自動計算されます<br>
 💡 例: 1000g を 1500円で仕入れる → 1gあたり 1.5円<br>
 💡 ジャンルは <strong>ドロップダウンから選択</strong>（コピペで新規ジャンル名が来た場合は自動追加）<br>
-💡 単位は <strong>g / ml</strong> のいずれか
+💡 単位は <strong>g / ml / 個</strong> のいずれか
 </div>
 
-<textarea id="bulk-paste-area" placeholder="ここをタップしてからスプレッドシートのデータを貼り付け (Ctrl+V)&#10;&#10;例:&#10;肉&#9;鶏もも肉&#9;g&#9;1000&#9;1500&#9;A社&#10;野菜&#9;キャベツ&#9;g&#9;1000&#9;300&#9;B商事" style="width:100%;min-height:80px;padding:10px;border:2px dashed #5DCAA5;border-radius:8px;background:#fafefb;font-family:monospace;font-size:11px;margin-bottom:14px;resize:vertical"></textarea>
+<textarea id="bulk-paste-area" placeholder="ここをタップしてからスプレッドシートのデータを貼り付け (Ctrl+V)&#10;&#10;例:&#10;肉&#9;鶏もも肉&#9;ブランド鶏 国産モモ2kg&#9;g&#9;2000&#9;3000&#9;A社&#10;野菜&#9;キャベツ&#9;&#9;g&#9;1000&#9;300&#9;B商事" style="width:100%;min-height:80px;padding:10px;border:2px dashed #5DCAA5;border-radius:8px;background:#fafefb;font-family:monospace;font-size:11px;margin-bottom:14px;resize:vertical"></textarea>
 
 <div style="background:#fafafa;border:0.5px solid #ddd;border-radius:8px;padding:8px 10px;margin-bottom:10px">
 <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
@@ -1482,11 +1679,12 @@ ${(() => {
 </div>
 
 <div style="overflow-x:auto;border:0.5px solid #ddd;border-radius:8px">
-<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:720px">
+<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:820px">
 <thead>
 <tr style="background:#f5f4f0;border-bottom:1px solid #ddd">
 <th style="padding:8px;text-align:left;font-weight:500;color:#666;width:80px">ジャンル</th>
 <th style="padding:8px;text-align:left;font-weight:500;color:#666;width:130px">食材名 <span style="color:#791F1F">*</span></th>
+<th style="padding:8px;text-align:left;font-weight:500;color:#666;width:130px">商品名</th>
 <th style="padding:8px;text-align:left;font-weight:500;color:#666;width:50px">単位 <span style="color:#791F1F">*</span></th>
 <th style="padding:8px;text-align:left;font-weight:500;color:#666;width:75px">仕入量 <span style="color:#791F1F">*</span></th>
 <th style="padding:8px;text-align:left;font-weight:500;color:#666;width:75px">仕入値 <span style="color:#791F1F">*</span></th>
@@ -1515,9 +1713,11 @@ ${S.ingCategories.map(c => `<option value="${escapeHtml(c.name)}" ${r.category==
 ${r.category && !S.ingCategories.find(c => c.name === r.category) ? `<option value="${escapeHtml(r.category)}" selected>＋ ${escapeHtml(r.category)}（新規）</option>` : ''}
 </select></td>
 <td style="padding:0"><input class="bulk-cell" data-bulk-f="name" data-bulk-i="${idx}" value="${escapeHtml(r.name||'')}" placeholder="鶏もも肉" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none"></td>
+<td style="padding:0"><input class="bulk-cell" data-bulk-f="productName" data-bulk-i="${idx}" value="${escapeHtml(r.productName||'')}" placeholder="ブランド鶏 国産モモ2kg" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none;color:#0C447C"></td>
 <td style="padding:0"><select class="bulk-cell" data-bulk-f="unit" data-bulk-i="${idx}" style="width:100%;padding:8px 4px;border:none;background:transparent;font-size:11px;outline:none;cursor:pointer">
 <option value="g" ${(r.unit||'g')==='g'?'selected':''}>g</option>
 <option value="ml" ${r.unit==='ml'?'selected':''}>ml</option>
+<option value="個" ${r.unit==='個'?'selected':''}>個</option>
 </select></td>
 <td style="padding:0"><input class="bulk-cell" type="number" step="0.01" data-bulk-f="purchaseQty" data-bulk-i="${idx}" value="${r.purchaseQty===undefined||r.purchaseQty===''?'':r.purchaseQty}" placeholder="1000" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none"></td>
 <td style="padding:0"><input class="bulk-cell" type="number" step="1" data-bulk-f="purchasePrice" data-bulk-i="${idx}" value="${r.purchasePrice===undefined||r.purchasePrice===''?'':r.purchasePrice}" placeholder="1500" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none"></td>
@@ -1692,6 +1892,10 @@ ${(() => {
 <div><p style="margin:0;font-size:11px;color:#085041;font-weight:500">💰 原価合計（この仕込み量）</p><p style="margin:2px 0 0;font-size:22px;font-weight:600;color:#085041">¥${fmtCost(cost.totalRaw||cost.total)}</p></div>
 ${cost.unknown > 0 ? `<div style="text-align:right"><p style="margin:0;font-size:10px;color:#854F0B;font-weight:500">⚠️ 未登録 ${cost.unknown}件</p><p style="margin:2px 0 0;font-size:9px;color:#854F0B">登録済み食材で登録してください</p></div>` : ''}
 </div>
+${x.servings && x.servings > 0 ? `<div style="margin-top:10px;padding:8px 10px;background:#fff;border-radius:6px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#666">1人前の量</p><p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#412402">${fmtCost(((x.baseQty||1000) * sc) / x.servings)}${escapeHtml(x.baseUnit||'g')}</p></div>
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#666">1人前の原価</p><p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#085041">¥${fmtCost((cost.totalRaw||cost.total) / x.servings)}</p></div>
+</div>` : ''}
 ${price && rate !== null ? `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #5DCAA5;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
 <div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">1人前原価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${fmtCost(costPerServing)}</p></div>
 <div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">売価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${price.toLocaleString()}</p></div>
@@ -1910,7 +2114,7 @@ ${f.ingredients.map((i,idx)=>{
     ).slice(0, 8);
   }
   return `<div style="margin-bottom:8px;padding:8px;background:${itemCost!==null?'#fafdfc':'#fff'};border:0.5px solid ${itemCost!==null?'#5DCAA5':'#ddd'};border-radius:8px;position:relative">
-<div style="display:grid;grid-template-columns:1fr 60px 60px 24px;gap:5px"><input class="fi" data-f="ing-name" data-i="${idx}" value="${escapeHtml(i.name)}" placeholder="材料名" style="margin-bottom:0" autocomplete="off"><input class="fi" type="number" step="0.1" data-f="ing-value" data-i="${idx}" value="${i.value===null||i.value===undefined?'':i.value}" placeholder="量" style="margin-bottom:0"><select class="fi" data-f="ing-unit" data-i="${idx}" style="padding:8px 4px;font-size:12px;margin-bottom:0"><option value="g" ${effUnit==='g'?'selected':''}>g</option><option value="ml" ${effUnit==='ml'?'selected':''}>ml</option></select><button class="sb" data-a="ri" data-x="${idx}">✕</button></div>
+<div style="display:grid;grid-template-columns:1fr 60px 60px 24px;gap:5px"><input class="fi" data-f="ing-name" data-i="${idx}" value="${escapeHtml(i.name)}" placeholder="材料名" style="margin-bottom:0" autocomplete="off"><input class="fi" type="number" step="0.1" data-f="ing-value" data-i="${idx}" value="${i.value===null||i.value===undefined?'':i.value}" placeholder="量" style="margin-bottom:0"><select class="fi" data-f="ing-unit" data-i="${idx}" style="padding:8px 4px;font-size:12px;margin-bottom:0"><option value="g" ${effUnit==='g'?'selected':''}>g</option><option value="ml" ${effUnit==='ml'?'selected':''}>ml</option><option value="個" ${effUnit==='個'?'selected':''}>個</option></select><button class="sb" data-a="ri" data-x="${idx}">✕</button></div>
 ${autocompleteSuggestions.length > 0 ? `<div style="position:absolute;top:42px;left:8px;right:8px;background:#fff;border:1px solid #5DCAA5;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:100;max-height:240px;overflow-y:auto">
 ${autocompleteSuggestions.map(ing => {
   const cat = S.ingCategories.find(c => c.id === ing.categoryId);
@@ -2023,6 +2227,7 @@ ${ings.map(ing => `<button data-a="add-from-list" data-x="${ing.id}" style="disp
 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
 <div style="flex:1;min-width:0">
 <div style="font-size:13px;font-weight:500;color:#000">${escapeHtml(ing.name)}</div>
+${ing.productName ? `<div style="font-size:10px;color:#0C447C;margin-top:1px">📦 ${escapeHtml(ing.productName)}</div>` : ''}
 <div style="font-size:10px;color:#666;margin-top:2px">¥${fmtCost(ing.cost)}/${escapeHtml(ing.unit)}${ing.supplier?` ・ ${escapeHtml(ing.supplier)}`:''}</div>
 </div>
 <span style="font-size:11px;color:${theme.accent};font-weight:600;flex-shrink:0">＋ 追加</span>
@@ -2040,6 +2245,7 @@ ${uncat.map(ing => `<button data-a="add-from-list" data-x="${ing.id}" style="dis
 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
 <div style="flex:1;min-width:0">
 <div style="font-size:13px;font-weight:500;color:#000">${escapeHtml(ing.name)}</div>
+${ing.productName ? `<div style="font-size:10px;color:#0C447C;margin-top:1px">📦 ${escapeHtml(ing.productName)}</div>` : ''}
 <div style="font-size:10px;color:#666;margin-top:2px">¥${fmtCost(ing.cost)}/${escapeHtml(ing.unit)}${ing.supplier?` ・ ${escapeHtml(ing.supplier)}`:''}</div>
 </div>
 <span style="font-size:11px;color:#666;font-weight:600;flex-shrink:0">＋ 追加</span>
@@ -2161,13 +2367,44 @@ function bind() {
         if (!confirm('このジャンルを削除しますか?\nこのジャンルの食材は「未分類」になります')) return;
         deleteIngCategory(v);
       }
+      else if (a === 'open-ing-manage') {
+        S.ingMgrFilter = 'all';
+        S.ingMgrSupplierFilter = 'all';
+        S.ingMgrSearch = '';
+        S.sc = 'ing-manage';
+        render();
+      }
+      else if (a === 'ingmgr-filter-cat') {
+        S.ingMgrFilter = v;
+        render();
+      }
+      else if (a === 'ingmgr-filter-sup') {
+        S.ingMgrSupplierFilter = v;
+        render();
+      }
+      else if (a === 'ingmgr-clear-search') {
+        S.ingMgrSearch = '';
+        render();
+      }
+      else if (a === 'ingmgr-clear-all') {
+        S.ingMgrFilter = 'all';
+        S.ingMgrSupplierFilter = 'all';
+        S.ingMgrSearch = '';
+        render();
+      }
       else if (a === 'add-ing') {
-        S.ingForm = { name:'', categoryId:'', unit:'g', purchaseQty:'', purchasePrice:'', cost:'', supplier:'' };
+        S.ingForm = { name:'', productName:'', categoryId:'', unit:'g', purchaseQty:'', purchasePrice:'', cost:'', supplier:'' };
         S.ingEditIdx = null;
+        // 戻り先を記憶（ing-manage画面から呼ばれた場合）
+        if (S.sc === 'ing-manage') S.ingReturnTo = 'ing-manage';
+        else S.ingReturnTo = 'admin';
         S.sc = 'ing-edit';
         render();
       }
       else if (a === 'bulk-ing') {
+        // 戻り先を記憶
+        if (S.sc === 'ing-manage') S.ingReturnTo = 'ing-manage';
+        else S.ingReturnTo = 'admin';
         // フィルター・検索をリセット
         S.bulkFilter = 'all';
         S.bulkSearch = '';
@@ -2178,6 +2415,7 @@ function bind() {
             id: ing.id,
             category: cat ? cat.name : '',
             name: ing.name,
+            productName: ing.productName || '',
             unit: ing.unit,
             purchaseQty: ing.purchaseQty || '',
             purchasePrice: ing.purchasePrice || '',
@@ -2187,9 +2425,9 @@ function bind() {
         if (S.bulkIngRows.length === 0) {
           // 何もないなら空行を3つ用意
           S.bulkIngRows = [
-            { category:'', name:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' },
-            { category:'', name:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' },
-            { category:'', name:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' }
+            { category:'', name:'', productName:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' },
+            { category:'', name:'', productName:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' },
+            { category:'', name:'', productName:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' }
           ];
         }
         S.sc = 'bulk-ing';
@@ -2197,7 +2435,7 @@ function bind() {
       }
       else if (a === 'bulk-add-row') {
         if (!S.bulkIngRows) S.bulkIngRows = [];
-        S.bulkIngRows.push({ category:'', name:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' });
+        S.bulkIngRows.push({ category:'', name:'', productName:'', unit:'g', purchaseQty:'', purchasePrice:'', supplier:'' });
         render();
       }
       else if (a === 'bulk-filter') {
@@ -2219,7 +2457,7 @@ function bind() {
       else if (a === 'cancel-bulk-ing') {
         if (!confirm('編集内容を破棄しますか?')) return;
         S.bulkIngRows = null;
-        S.sc = 'admin';
+        S.sc = S.ingReturnTo || 'admin';
         render();
       }
       else if (a === 'save-bulk-ing') {
@@ -2230,6 +2468,9 @@ function bind() {
         if (!ing) return;
         S.ingForm = { ...ing };
         S.ingEditIdx = v;
+        // 戻り先を記憶
+        if (S.sc === 'ing-manage') S.ingReturnTo = 'ing-manage';
+        else S.ingReturnTo = 'admin';
         S.sc = 'ing-edit';
         render();
       }
@@ -2239,7 +2480,7 @@ function bind() {
       else if (a === 'cancel-ing-edit') {
         S.ingForm = null;
         S.ingEditIdx = null;
-        S.sc = 'admin';
+        S.sc = S.ingReturnTo || 'admin';
         render();
       }
       else if (a === 'del-ing') {
@@ -2251,13 +2492,21 @@ function bind() {
         deleteIngredient(v);
         S.ingForm = null;
         S.ingEditIdx = null;
-        S.sc = 'admin';
+        S.sc = S.ingReturnTo || 'admin';
         render();
       }
       else if (a === 'agree') { S.warningSeen = true; S.sc = 'stores'; render(); }
       else if (a === 'logout') { if(confirm('ログアウトしますか?'))doLogout(); }
       else if (a === 'ssel') { S.currentStore = v; S.tab = v==='shumai'?'all':'grill'; S.sc = 'menu'; render(); }
-      else if (a === 'bs') { S.sc = 'stores'; S.q=''; S.fg=[]; S.fse=[]; S.ft='all'; S.fa=[]; S.filterOpen=false; render(); }
+      else if (a === 'bs') { 
+        // ing-manage画面からは管理画面に戻る
+        if (S.sc === 'ing-manage') {
+          S.sc = 'admin';
+          render();
+          return;
+        }
+        S.sc = 'stores'; S.q=''; S.fg=[]; S.fse=[]; S.ft='all'; S.fa=[]; S.filterOpen=false; render(); 
+      }
       else if (a === 'tab') { S.tab = v; render(); }
       else if (a === 'tf') { S.filterOpen = !S.filterOpen; render(); }
       else if (a === 'fg') { S.fg = S.fg.includes(v)?S.fg.filter(y=>y!==v):[...S.fg,v]; render(); }
@@ -2452,6 +2701,7 @@ function bind() {
       }
       if (f === 'im-cost') { if(S.ingForm) S.ingForm.cost = el.value === '' ? 0 : parseFloat(el.value); return; }
       if (f === 'im-supplier') { if(S.ingForm) S.ingForm.supplier = el.value; return; }
+      if (f === 'im-product') { if(S.ingForm) S.ingForm.productName = el.value; return; }
       if (!S.form) return;
       if (f==='ing-name') { 
         S.form.ingredients[i].name = el.value; 
@@ -2612,6 +2862,31 @@ function bind() {
       }, 200);
     };
   });
+  // 食材管理画面の検索ハンドラ
+  root.querySelectorAll('[data-ingmgr-search]').forEach(el => {
+    let composing = false;
+    el.addEventListener('compositionstart', () => { composing = true; });
+    el.addEventListener('compositionend', () => { 
+      composing = false; 
+      S.ingMgrSearch = el.value;
+      clearTimeout(S.ingMgrSearchTimer);
+      S.ingMgrSearchTimer = setTimeout(() => render(), 200);
+    });
+    el.oninput = () => {
+      if (composing) return;
+      S.ingMgrSearch = el.value;
+      clearTimeout(S.ingMgrSearchTimer);
+      S.ingMgrSearchTimer = setTimeout(() => {
+        const pos = el.selectionStart;
+        render();
+        const newEl = document.querySelector('[data-ingmgr-search]');
+        if (newEl) {
+          newEl.focus();
+          try { newEl.setSelectionRange(pos, pos); } catch(e) {}
+        }
+      }, 200);
+    };
+  });
   // 一括編集のセル入力ハンドラ
   root.querySelectorAll('[data-bulk-f]').forEach(el => {
     el.oninput = () => {
@@ -2631,8 +2906,8 @@ function bind() {
         const tr = el.closest('tr');
         if (tr) {
           const tds = tr.querySelectorAll('td');
-          // 単価カラム（index=5）
-          const costCell = tds[5];
+          // 単価カラム（index=6: ジャンル,食材名,商品名,単位,仕入量,仕入値,単価）
+          const costCell = tds[6];
           if (costCell) {
             if (!isNaN(q) && q > 0 && !isNaN(p) && p >= 0) {
               const uc = p / q;
@@ -2661,20 +2936,55 @@ function bind() {
       if (lines.length === 0) return;
       const newRows = lines.map(line => {
         const cols = line.split('\t');
-        // 「ジャンル | 食材名 | 単位 | 仕入量 | 仕入値 | 仕入先」
+        // 「ジャンル | 食材名 | 商品名 | 単位 | 仕入量 | 仕入値 | 仕入先」
+        // 旧形式「ジャンル | 食材名 | 単位 | 仕入量 | 仕入値 | 仕入先」(6列)にも対応
         const parseNum = (s) => {
           if (!s) return '';
           const n = parseFloat(String(s).replace(/[^\d.\-]/g, ''));
           return isNaN(n) ? '' : n;
         };
-        return {
-          category: (cols[0] || '').trim(),
-          name: (cols[1] || '').trim(),
-          unit: (cols[2] || 'g').trim() || 'g',
-          purchaseQty: parseNum(cols[3]),
-          purchasePrice: parseNum(cols[4]),
-          supplier: (cols[5] || '').trim()
-        };
+        // 列数で判定: 7列以上なら新形式、6列以下なら旧形式
+        const isNew = cols.length >= 7;
+        if (isNew) {
+          // 新形式（商品名あり）
+          return {
+            category: (cols[0] || '').trim(),
+            name: (cols[1] || '').trim(),
+            productName: (cols[2] || '').trim(),
+            unit: ((cols[3] || 'g').trim() || 'g'),
+            purchaseQty: parseNum(cols[4]),
+            purchasePrice: parseNum(cols[5]),
+            supplier: (cols[6] || '').trim()
+          };
+        } else {
+          // 旧形式（商品名なし）- 単位列の中身で判定する補助ロジック
+          // 第3列が「g」「ml」「kg」「L」「個」みたいな単位ならそれは単位、違うなら商品名と扱う
+          const third = (cols[2] || '').trim();
+          const isUnitLike = /^(g|ml|kg|l|個|本|枚|束|袋|適量|少々)$/i.test(third);
+          if (isUnitLike) {
+            // 旧形式（6列：商品名なし）
+            return {
+              category: (cols[0] || '').trim(),
+              name: (cols[1] || '').trim(),
+              productName: '',
+              unit: third || 'g',
+              purchaseQty: parseNum(cols[3]),
+              purchasePrice: parseNum(cols[4]),
+              supplier: (cols[5] || '').trim()
+            };
+          } else {
+            // 7列構造だがデータが少ない場合
+            return {
+              category: (cols[0] || '').trim(),
+              name: (cols[1] || '').trim(),
+              productName: third,
+              unit: ((cols[3] || 'g').trim() || 'g'),
+              purchaseQty: parseNum(cols[4]),
+              purchasePrice: parseNum(cols[5]),
+              supplier: (cols[6] || '').trim()
+            };
+          }
+        }
       });
       // 既存の空行を除去
       const existing = (S.bulkIngRows || []).filter(r => r.name || r.category || r.purchasePrice);
