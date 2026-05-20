@@ -215,6 +215,7 @@ const ALG = ['卵','乳','小麦','えび','かに','落花生','そば','貝','
 const S = {
   sc: 'login', loading: false, authed: false,
   bulkProgress: null,
+  openIng: null,
   pwInput: '', pwError: '', warningSeen: false,
   config: null, stores: [], recipes: [],
   currentStore: null, tab: 'grill', rec: null, scale: 1,
@@ -2018,11 +2019,45 @@ ${(x.allergy||[]).length>0?`<div style="background:#FCEBEB;padding:10px 12px;bor
 <span class="acc-chev ${S.open.ing?'on':''}">▼</span>
 </div>
 ${S.open.ing?`<div class="acc-body">
-${(x.ingredients||[]).map(i=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid #eee;font-size:13px">
-<span>${i.linkTo?`<span class="ing-link" data-a="goto" data-x="${escapeHtml(i.linkTo)}">${escapeHtml(i.name)} 🔗</span>`:escapeHtml(i.name)}</span>
-<span style="color:#666;font-weight:500">${fmtIng(i.value===null||i.value===undefined?null:i.value*sc, i.unit||'')}</span>
-</div>`).join('')}
+${(x.ingredients||[]).map((i,iidx)=>{
+  // 登録食材を検索
+  const master = i.name ? findIngredientMaster(i.name) : null;
+  // この材料の原価を計算
+  let itemCost = null;
+  let unitMismatch = false;
+  if (master && i.value !== null && i.value !== undefined && !isNaN(parseFloat(i.value))) {
+    const ru = i.unit || 'g';
+    const mu = master.unit || 'g';
+    let qty = parseFloat(i.value) * sc;
+    let matched = false;
+    if (ru === mu) { matched = true; }
+    else if (ru === 'kg' && mu === 'g') { qty *= 1000; matched = true; }
+    else if (ru === 'L' && mu === 'ml') { qty *= 1000; matched = true; }
+    else if (ru === 'g' && mu === 'kg') { qty /= 1000; matched = true; }
+    else if (ru === 'ml' && mu === 'L') { qty /= 1000; matched = true; }
+    if (matched) { itemCost = qty * master.cost; }
+    else { unitMismatch = true; }
+  }
+  // 手入力原価
+  if (!master && i.manualCost !== undefined && i.manualCost !== null && i.manualCost !== '' && !isNaN(parseFloat(i.manualCost))) {
+    itemCost = parseFloat(i.manualCost) * sc;
+  }
+  const isOpen = S.openIng === iidx;
+  const hasDetail = master && master.productName;
+  return `<div style="border-bottom:0.5px solid #eee">
+<div ${hasDetail?`data-a="toggle-ing-detail" data-x="${iidx}"`:''} style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;${hasDetail?'cursor:pointer':''}">
+<span style="flex:1">${i.linkTo?`<span class="ing-link" data-a="goto" data-x="${escapeHtml(i.linkTo)}">${escapeHtml(i.name)} 🔗</span>`:escapeHtml(i.name)}${hasDetail?`<span style="font-size:10px;color:#0C447C;margin-left:4px">${isOpen?'▲':'▼商品名'}</span>`:''}</span>
+<span style="color:#666;font-weight:500;margin-right:10px">${fmtIng(i.value===null||i.value===undefined?null:i.value*sc, i.unit||'')}</span>
+<span style="font-size:12px;font-weight:700;color:${itemCost!==null?'#085041':'#bbb'};min-width:52px;text-align:right">${itemCost!==null?`¥${fmtCost(itemCost)}`:unitMismatch?'単位⚠️':'—'}</span>
+</div>
+${isOpen && hasDetail ? `<div style="padding:0 0 8px;font-size:11px;color:#0C447C;background:#F0F6FC;border-radius:6px;padding:8px 10px;margin-bottom:6px">
+📦 商品名: ${escapeHtml(master.productName)}<br>
+<span style="color:#666">¥${fmtCost(master.cost)}/${master.unit}${master.supplier?` ・ 仕入先: ${escapeHtml(master.supplier)}`:''}</span>
+</div>` : ''}
+</div>`;
+}).join('')}
 ${(x.ingredients||[]).some(i=>i.linkTo)?`<p style="margin:10px 0 0;padding:8px 10px;background:#E6F1FB;border-radius:6px;font-size:11px;color:#0C447C">💡 青文字の材料はタップでレシピが開きます</p>`:''}
+${(x.ingredients||[]).some(i=>{const m=findIngredientMaster(i.name);return m&&m.productName;})?`<p style="margin:8px 0 0;padding:8px 10px;background:#FAEEDA;border-radius:6px;font-size:11px;color:#854F0B">💡「▼商品名」をタップすると仕入れ商品の詳細が見られます</p>`:''}
 </div>`:''}
 </div>
 <div class="acc">
@@ -2684,6 +2719,11 @@ function bind() {
       else if (a === 'cf') { S.fg=[]; S.fse=[]; S.ft='all'; S.fa=[]; render(); }
       else if (a === 'dt') { S.rec = v; S.scale = 1; S.history=[]; S.open={ing:true,proc:false,stor:false}; S.sc = 'detail'; render(); }
       else if (a === 'goto') { S.history.push(S.rec); S.rec = v; S.scale=1; S.open={ing:true,proc:false,stor:false}; render(); }
+      else if (a === 'toggle-ing-detail') {
+        const idx = parseInt(v);
+        S.openIng = (S.openIng === idx) ? null : idx;
+        render();
+      }
       else if (a === 'back-link') { S.rec = S.history.pop(); S.scale=1; render(); }
       else if (a === 'bm') { S.sc = 'menu'; render(); }
       else if (a === 't') { S.open[v] = !S.open[v]; render(); }
