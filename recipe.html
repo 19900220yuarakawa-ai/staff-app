@@ -3,9 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#085041">
 <title>Sanpo-Works レシピ・調理工程マニュアル</title>
-<link rel="manifest" href="manifest.json">
+
+<!-- レシピアプリ専用のPWA設定（査定アプリと区別するため埋め込み） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="レシピ管理">
+<meta name="application-name" content="レシピ管理">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxODAiIGhlaWdodD0iMTgwIiB2aWV3Qm94PSIwIDAgMTgwIDE4MCI+PHJlY3Qgd2lkdGg9IjE4MCIgaGVpZ2h0PSIxODAiIGZpbGw9IiMwODUwNDEiLz48dGV4dCB4PSI5MCIgeT0iMTE4IiBmb250LXNpemU9IjkwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn42zPC90ZXh0Pjwvc3ZnPg==">
+<link rel="manifest" href='data:application/manifest+json,{"name":"Sanpo-Works レシピ管理","short_name":"レシピ管理","start_url":"./recipe.html","display":"standalone","background_color":"%23085041","theme_color":"%23085041","icons":[{"src":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiB2aWV3Qm94PSIwIDAgMTkyIDE5MiI+PHJlY3Qgd2lkdGg9IjE5MiIgaGVpZ2h0PSIxOTIiIGZpbGw9IiMwODUwNDEiLz48dGV4dCB4PSI5NiIgeT0iMTI2IiBmb250LXNpemU9Ijk2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn42zPC90ZXh0Pjwvc3ZnPg==","sizes":"192x192","type":"image/svg+xml"}]}'>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;background:#f5f4f0;color:#222;line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -1645,7 +1652,7 @@ function renderBulkIng() {
 💡 仕入量と仕入値から「1単位あたり原価」が自動計算されます<br>
 💡 例: 1000g を 1500円で仕入れる → 1gあたり 1.5円<br>
 💡 ジャンルは <strong>ドロップダウンから選択</strong>（コピペで新規ジャンル名が来た場合は自動追加）<br>
-💡 単位は <strong>g / ml / 個</strong> のいずれか
+💡 単位は <strong>g / ml / 個 / 枚</strong> のいずれか
 </div>
 
 <textarea id="bulk-paste-area" placeholder="ここをタップしてからスプレッドシートのデータを貼り付け (Ctrl+V)&#10;&#10;例:&#10;肉&#9;鶏もも肉&#9;ブランド鶏 国産モモ2kg&#9;g&#9;2000&#9;3000&#9;A社&#10;野菜&#9;キャベツ&#9;&#9;g&#9;1000&#9;300&#9;B商事" style="width:100%;min-height:80px;padding:10px;border:2px dashed #5DCAA5;border-radius:8px;background:#fafefb;font-family:monospace;font-size:11px;margin-bottom:14px;resize:vertical"></textarea>
@@ -1764,6 +1771,7 @@ ${isDup ? `<span style="position:absolute;top:2px;right:2px;background:#791F1F;c
 <option value="g" ${(r.unit||'g')==='g'?'selected':''}>g</option>
 <option value="ml" ${r.unit==='ml'?'selected':''}>ml</option>
 <option value="個" ${r.unit==='個'?'selected':''}>個</option>
+<option value="枚" ${r.unit==='枚'?'selected':''}>枚</option>
 </select></td>
 <td style="padding:0"><input class="bulk-cell" type="number" step="0.01" data-bulk-f="purchaseQty" data-bulk-i="${idx}" value="${r.purchaseQty===undefined||r.purchaseQty===''?'':r.purchaseQty}" placeholder="1000" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none"></td>
 <td style="padding:0"><input class="bulk-cell" type="number" step="1" data-bulk-f="purchasePrice" data-bulk-i="${idx}" value="${r.purchasePrice===undefined||r.purchasePrice===''?'':r.purchasePrice}" placeholder="1500" style="width:100%;padding:8px;border:none;background:transparent;font-size:11px;outline:none"></td>
@@ -2160,7 +2168,7 @@ ${f.ingredients.map((i,idx)=>{
     ).slice(0, 8);
   }
   return `<div style="margin-bottom:8px;padding:8px;background:${itemCost!==null?'#fafdfc':'#fff'};border:0.5px solid ${itemCost!==null?'#5DCAA5':'#ddd'};border-radius:8px;position:relative">
-<div style="display:grid;grid-template-columns:1fr 60px 60px 24px;gap:5px"><input class="fi" data-f="ing-name" data-i="${idx}" value="${escapeHtml(i.name)}" placeholder="材料名" style="margin-bottom:0" autocomplete="off"><input class="fi" type="number" step="0.1" data-f="ing-value" data-i="${idx}" value="${i.value===null||i.value===undefined?'':i.value}" placeholder="量" style="margin-bottom:0"><select class="fi" data-f="ing-unit" data-i="${idx}" style="padding:8px 4px;font-size:12px;margin-bottom:0"><option value="g" ${effUnit==='g'?'selected':''}>g</option><option value="ml" ${effUnit==='ml'?'selected':''}>ml</option><option value="個" ${effUnit==='個'?'selected':''}>個</option></select><button class="sb" data-a="ri" data-x="${idx}">✕</button></div>
+<div style="display:grid;grid-template-columns:1fr 60px 60px 24px;gap:5px"><input class="fi" data-f="ing-name" data-i="${idx}" value="${escapeHtml(i.name)}" placeholder="材料名" style="margin-bottom:0" autocomplete="off"><input class="fi" type="number" step="0.1" data-f="ing-value" data-i="${idx}" value="${i.value===null||i.value===undefined?'':i.value}" placeholder="量" style="margin-bottom:0"><select class="fi" data-f="ing-unit" data-i="${idx}" style="padding:8px 4px;font-size:12px;margin-bottom:0"><option value="g" ${effUnit==='g'?'selected':''}>g</option><option value="ml" ${effUnit==='ml'?'selected':''}>ml</option><option value="個" ${effUnit==='個'?'selected':''}>個</option><option value="枚" ${effUnit==='枚'?'selected':''}>枚</option></select><button class="sb" data-a="ri" data-x="${idx}">✕</button></div>
 ${autocompleteSuggestions.length > 0 ? `<div style="position:absolute;top:42px;left:8px;right:8px;background:#fff;border:1px solid #5DCAA5;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:100;max-height:240px;overflow-y:auto">
 ${autocompleteSuggestions.map(ing => {
   const cat = S.ingCategories.find(c => c.id === ing.categoryId);
