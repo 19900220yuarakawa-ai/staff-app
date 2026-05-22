@@ -216,6 +216,7 @@ const S = {
   sc: 'login', loading: false, authed: false,
   bulkProgress: null,
   openIng: null,
+  sortMode: 'default',
   pwInput: '', pwError: '', warningSeen: false,
   config: null, stores: [], recipes: [],
   currentStore: null, tab: 'grill', rec: null, scale: 1,
@@ -254,7 +255,11 @@ function fmtIng(v, u) {
   const r = Math.round(v * 10) / 10;
   return (r % 1 === 0 ? r : r.toFixed(1)) + u;
 }
-function gn(id) { const s = S.stores.find(x => x.id === id); return s ? s.name : ''; }
+function gn(id) { 
+  if (id === '__all__') return '🌐 全店レシピ';
+  const s = S.stores.find(x => x.id === id); 
+  return s ? s.name : ''; 
+}
 function ml(i) { const x = TABS.find(m => m.i === i); return x ? x.l : ''; }
 function gl(i) { const x = GENRES.find(g => g.i === i); return x ? x.l : ''; }
 function sel(i) { const x = SE.find(s => s.i === i); return x ? x.l : ''; }
@@ -1072,6 +1077,13 @@ ${showBackupWarn ? `<div style="background:${bs.level==='danger'?'#FCEBEB':'#FAE
 <div style="padding:14px 18px 24px">
 <h2 style="font-size:18px;font-weight:500;margin:8px 0 4px">店舗を選択</h2>
 <p style="font-size:12px;color:#666;margin:0 0 16px">レシピを見たい店舗をタップ</p>
+
+<div data-a="ssel" data-x="__all__" style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;border:1px solid #5DCAA5;background:#E1F5EE;cursor:pointer;margin-bottom:16px">
+<div style="width:42px;height:42px;border-radius:10px;background:#085041;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🌐</div>
+<div style="flex:1"><p style="margin:0;font-size:14px;font-weight:600;color:#085041">全店レシピを見る</p><p style="margin:2px 0 0;font-size:12px;color:#085041">すべての店舗のレシピをまとめて表示</p></div>
+<span style="color:#085041;font-size:18px">›</span>
+</div>
+
 ${norm.map(s => `
 <div data-a="ssel" data-x="${s.id}" style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;border:0.5px solid #ddd;background:#fff;cursor:pointer;margin-bottom:10px">
 <div style="width:42px;height:42px;border-radius:10px;background:#f5f4f0;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex-shrink:0">
@@ -1850,11 +1862,19 @@ ${rows.length === 0 ? '<p style="text-align:center;color:#999;padding:20px;font-
 
 function renderMenu() {
   const sh = isShumaiStore();
+  const isAll = S.currentStore === '__all__';
   // archivedフラグ付きはアーカイブされたレシピなので除外
-  let l = S.recipes.filter(v => (v.stores || []).includes(S.currentStore) && !v.archived);
+  let l = isAll 
+    ? S.recipes.filter(v => !v.archived)
+    : S.recipes.filter(v => (v.stores || []).includes(S.currentStore) && !v.archived);
   // recipeTypeへの後方互換マッピング
   const getType = (v) => v.recipeType || (v.isSauce ? 'sauce' : 'normal');
-  if (sh) {
+  if (isAll) {
+    // 全店モード: タブはタイプ別のみ（店舗別の使用中フィルターは無効）
+    if (S.tab === 'sauce') l = l.filter(v => getType(v) === 'sauce');
+    else if (S.tab === 'potion') l = l.filter(v => getType(v) === 'potion');
+    else if (S.tab !== 'all') l = l.filter(v => getType(v) === 'normal' && v.method === S.tab);
+  } else if (sh) {
     if (S.tab === 'inuse') l = l.filter(v => (v.inUse || []).includes(S.currentStore));
   } else {
     if (S.tab === 'inuse') l = l.filter(v => (v.inUse || []).includes(S.currentStore));
@@ -1867,6 +1887,34 @@ function renderMenu() {
   if (S.fse.length) l = l.filter(v => S.fse.includes(v.season));
   if (S.ft !== 'all') l = l.filter(v => v.temp === S.ft);
   if (S.fa.length) l = l.filter(v => !S.fa.some(a => (v.allergy || []).includes(a)));
+  
+  // 並び替え
+  const sortMode = S.sortMode || 'default';
+  if (sortMode !== 'default') {
+    // 各レシピの原価率を計算
+    const getRate = (v) => {
+      const c = calcRecipeCost(v, 1);
+      const cv = c.totalRaw || c.total || 0;
+      const price = v.price ? parseFloat(v.price) : null;
+      if (!price || price <= 0 || cv <= 0) return null;
+      return (cv / price) * 100;
+    };
+    l = [...l].sort((a, b) => {
+      if (sortMode === 'name') {
+        return (a.name||'').localeCompare(b.name||'', 'ja');
+      }
+      const ra = getRate(a);
+      const rb = getRate(b);
+      // 原価率がないものは末尾に
+      if (ra === null && rb === null) return 0;
+      if (ra === null) return 1;
+      if (rb === null) return -1;
+      if (sortMode === 'rate-high') return rb - ra; // 高い順
+      if (sortMode === 'rate-low') return ra - rb;  // 低い順
+      return 0;
+    });
+  }
+  
   const fc = S.fg.length + S.fse.length + S.fa.length + (S.ft !== 'all' ? 1 : 0);
   const tabsToShow = sh ? SHUMAI_TABS : TABS;
   return `
@@ -1884,6 +1932,13 @@ ${(() => {
 </div>
 ${sh ? `<div style="background:#FCEBEB;padding:6px 18px;font-size:11px;color:#791F1F;text-align:center">専門レシピ</div>` : ''}
 <div style="padding:8px 18px"><div style="position:relative"><input class="fi" data-f="q" placeholder="メニュー名・考案者で検索" value="${escapeHtml(S.q)}" style="padding-left:32px"><span style="position:absolute;left:10px;top:11px;color:#999">🔍</span></div></div>
+<div style="padding:0 18px 8px;display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+<span style="font-size:11px;color:#666;flex-shrink:0">並び替え:</span>
+<button data-a="sort" data-x="default" style="background:${(S.sortMode||'default')==='default'?'#412402':'#fff'};color:${(S.sortMode||'default')==='default'?'#fff':'#412402'};border:1px solid #ddd;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">標準</button>
+<button data-a="sort" data-x="name" style="background:${S.sortMode==='name'?'#412402':'#fff'};color:${S.sortMode==='name'?'#fff':'#412402'};border:1px solid #ddd;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">名前順</button>
+<button data-a="sort" data-x="rate-high" style="background:${S.sortMode==='rate-high'?'#791F1F':'#fff'};color:${S.sortMode==='rate-high'?'#fff':'#791F1F'};border:1px solid #F7C1C1;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">原価率 高い順</button>
+<button data-a="sort" data-x="rate-low" style="background:${S.sortMode==='rate-low'?'#085041':'#fff'};color:${S.sortMode==='rate-low'?'#fff':'#085041'};border:1px solid #5DCAA5;border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer;font-weight:500">原価率 低い順</button>
+</div>
 <div style="display:flex;padding:0 8px;border-bottom:0.5px solid #ddd;overflow-x:auto">
 ${tabsToShow.map(t => `<button class="tb ${S.tab===t.i?'on':''}" data-a="tab" data-x="${t.i}">${t.ic} ${t.l}</button>`).join('')}
 </div>
@@ -1898,12 +1953,24 @@ ${l.length === 0 ? `<p style="text-align:center;color:#999;font-size:13px;paddin
 ${x.imgURL ? `<img src="${escapeHtml(x.imgURL)}" style="width:100%;height:140px;object-fit:cover;display:block">` : `<div style="height:120px;background:#f1efe8;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:32px">📷</div>`}
 <div style="padding:10px 12px">
 <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><p style="margin:0;font-size:14px;font-weight:500;flex:1">${escapeHtml(x.name)}</p>${x.temp==='h'?'<span class="tg h">🔥 温</span>':x.temp==='c'?'<span class="tg c">❄️ 冷</span>':''}</div>
-<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px">${x.genre?`<span class="gb">${escapeHtml(gl(x.genre))}</span>`:''}${x.season&&x.season!=='all'?`<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:#EEEDFE;color:#3C3489;font-weight:500">${escapeHtml(sel(x.season))}</span>`:''}<span style="font-size:11px;color:#666">${escapeHtml(x.time||'')}</span>${(() => { const c = calcRecipeCost(x, 1); return c.items.filter(i=>i.found).length>0 ? `<span style="font-size:11px;color:#085041;font-weight:500">¥${fmtCost(c.totalRaw||c.total)}</span>` : ''; })()}</div>
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px">${x.genre?`<span class="gb">${escapeHtml(gl(x.genre))}</span>`:''}${x.season&&x.season!=='all'?`<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:#EEEDFE;color:#3C3489;font-weight:500">${escapeHtml(sel(x.season))}</span>`:''}<span style="font-size:11px;color:#666">${escapeHtml(x.time||'')}</span>${(() => { const c = calcRecipeCost(x, 1); return c.items.filter(i=>i.found).length>0 ? `<span style="font-size:11px;color:#085041;font-weight:500">¥${fmtCost(c.totalRaw||c.total)}</span>` : ''; })()}${(() => {
+  // 原価率バッジ
+  const c = calcRecipeCost(x, 1);
+  const cv = c.totalRaw || c.total || 0;
+  const price = x.price ? parseFloat(x.price) : null;
+  if (!price || price <= 0 || cv <= 0) return '';
+  const rate = (cv / price) * 100;
+  let bg, col;
+  if (rate <= 30) { bg = '#E1F5EE'; col = '#085041'; }
+  else if (rate <= 40) { bg = '#FAEEDA'; col = '#854F0B'; }
+  else { bg = '#FFEBE9'; col = '#791F1F'; }
+  return `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:${bg};color:${col};font-weight:600">原価率 ${rate.toFixed(0)}%</span>`;
+})()}</div>
 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px"><p style="margin:0;font-size:11px;color:#666">考案: ${escapeHtml(x.creator||'—')}</p>${using?'<span class="use-banner">⭐ 使用中</span>':''}${sho?`<span class="shr">🔗 ${(x.stores||[]).length}店舗</span>`:''}</div>
 </div></div>`;
   }).join('')}
 </div>
-<button class="fa" data-a="op" aria-label="新規登録">＋</button>`;
+${S.currentStore === '__all__' ? '' : '<button class="fa" data-a="op" aria-label="新規登録">＋</button>'}`;
 }
 
 function renderFilterPanel(fc) {
@@ -2249,7 +2316,7 @@ ${f.ingredients.map((i,idx)=>{
     ).slice(0, 8);
   }
   return `<div style="margin-bottom:8px;padding:8px;background:${itemCost!==null?'#fafdfc':'#fff'};border:0.5px solid ${itemCost!==null?'#5DCAA5':'#ddd'};border-radius:8px;position:relative">
-<div style="display:grid;grid-template-columns:1fr 60px 60px 24px;gap:5px"><input class="fi" data-f="ing-name" data-i="${idx}" value="${escapeHtml(i.name)}" placeholder="材料名" style="margin-bottom:0" autocomplete="off"><input class="fi" type="number" step="0.1" data-f="ing-value" data-i="${idx}" value="${i.value===null||i.value===undefined?'':i.value}" placeholder="量" style="margin-bottom:0"><select class="fi" data-f="ing-unit" data-i="${idx}" style="padding:8px 4px;font-size:12px;margin-bottom:0"><option value="g" ${effUnit==='g'?'selected':''}>g</option><option value="ml" ${effUnit==='ml'?'selected':''}>ml</option><option value="個" ${effUnit==='個'?'selected':''}>個</option><option value="枚" ${effUnit==='枚'?'selected':''}>枚</option></select><button class="sb" data-a="ri" data-x="${idx}">✕</button></div>
+<div style="display:grid;grid-template-columns:1fr 56px 56px 22px 22px;gap:4px;align-items:center"><input class="fi" data-f="ing-name" data-i="${idx}" value="${escapeHtml(i.name)}" placeholder="材料名" style="margin-bottom:0" autocomplete="off"><input class="fi" type="number" step="0.1" data-f="ing-value" data-i="${idx}" value="${i.value===null||i.value===undefined?'':i.value}" placeholder="量" style="margin-bottom:0"><select class="fi" data-f="ing-unit" data-i="${idx}" style="padding:8px 2px;font-size:12px;margin-bottom:0"><option value="g" ${effUnit==='g'?'selected':''}>g</option><option value="ml" ${effUnit==='ml'?'selected':''}>ml</option><option value="個" ${effUnit==='個'?'selected':''}>個</option><option value="枚" ${effUnit==='枚'?'selected':''}>枚</option></select><div style="display:flex;flex-direction:column;gap:2px"><button data-a="ing-up" data-x="${idx}" ${idx===0?'disabled':''} style="background:${idx===0?'#f0f0f0':'#E1F5EE'};border:none;border-radius:4px;width:22px;height:17px;font-size:10px;cursor:${idx===0?'default':'pointer'};color:${idx===0?'#ccc':'#085041'};padding:0;line-height:1">▲</button><button data-a="ing-down" data-x="${idx}" ${idx===f.ingredients.length-1?'disabled':''} style="background:${idx===f.ingredients.length-1?'#f0f0f0':'#E1F5EE'};border:none;border-radius:4px;width:22px;height:17px;font-size:10px;cursor:${idx===f.ingredients.length-1?'default':'pointer'};color:${idx===f.ingredients.length-1?'#ccc':'#085041'};padding:0;line-height:1">▼</button></div><button class="sb" data-a="ri" data-x="${idx}" style="height:36px">✕</button></div>
 ${autocompleteSuggestions.length > 0 ? `<div style="position:absolute;top:42px;left:8px;right:8px;background:#fff;border:1px solid #5DCAA5;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:100;max-height:240px;overflow-y:auto">
 ${autocompleteSuggestions.map(ing => {
   const cat = S.ingCategories.find(c => c.id === ing.categoryId);
@@ -2700,7 +2767,12 @@ function bind() {
       }
       else if (a === 'agree') { S.warningSeen = true; S.sc = 'stores'; render(); }
       else if (a === 'logout') { if(confirm('ログアウトしますか?'))doLogout(); }
-      else if (a === 'ssel') { S.currentStore = v; S.tab = v==='shumai'?'all':'grill'; S.sc = 'menu'; render(); }
+      else if (a === 'ssel') { 
+        S.currentStore = v; 
+        S.tab = (v==='shumai'||v==='__all__') ? 'all' : 'grill'; 
+        S.sc = 'menu'; 
+        render(); 
+      }
       else if (a === 'bs') { 
         // ing-manage画面からは管理画面に戻る
         if (S.sc === 'ing-manage') {
@@ -2719,6 +2791,10 @@ function bind() {
       else if (a === 'cf') { S.fg=[]; S.fse=[]; S.ft='all'; S.fa=[]; render(); }
       else if (a === 'dt') { S.rec = v; S.scale = 1; S.history=[]; S.open={ing:true,proc:false,stor:false}; S.sc = 'detail'; render(); }
       else if (a === 'goto') { S.history.push(S.rec); S.rec = v; S.scale=1; S.open={ing:true,proc:false,stor:false}; render(); }
+      else if (a === 'sort') {
+        S.sortMode = v;
+        render();
+      }
       else if (a === 'toggle-ing-detail') {
         const idx = parseInt(v);
         S.openIng = (S.openIng === idx) ? null : idx;
@@ -2777,6 +2853,24 @@ function bind() {
       else if (a === 'fa-form') { S.form.allergy = S.form.allergy.includes(v)?S.form.allergy.filter(y=>y!==v):[...S.form.allergy,v]; render(); }
       else if (a === 'ai') { S.form.ingredients.push({name:'',value:null,unit:'g',linkTo:null}); render(); }
       else if (a === 'ri') { if(S.form.ingredients.length>1){S.form.ingredients.splice(parseInt(v),1);render();} }
+      else if (a === 'ing-up') {
+        const idx = parseInt(v);
+        if (S.form && idx > 0) {
+          const arr = S.form.ingredients;
+          [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+          S.acIngIdx = null; // オートコンプリート閉じる
+          render();
+        }
+      }
+      else if (a === 'ing-down') {
+        const idx = parseInt(v);
+        if (S.form && idx < S.form.ingredients.length - 1) {
+          const arr = S.form.ingredients;
+          [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+          S.acIngIdx = null;
+          render();
+        }
+      }
       else if (a === 'clear-mcost') {
         const idx = parseInt(v);
         if (S.form.ingredients[idx]) {
