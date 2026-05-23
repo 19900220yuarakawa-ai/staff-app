@@ -459,6 +459,41 @@ function calcRecipeCost(recipe, scale = 1) {
   return { total: total > 0 && total < 1 ? Math.ceil(total) : Math.round(total), totalRaw: total, items, unknown };
 }
 
+// 1人前の原価・売価・原価率をまとめて計算する共通関数
+function calcRecipeRate(recipe) {
+  // 仕込み量全体の原価（×1倍）
+  const c = calcRecipeCost(recipe, 1);
+  const totalCost = c.totalRaw || c.total || 0;
+  // 人前（明示的に設定されている場合のみ有効）
+  const hasServings = recipe.servings && parseFloat(recipe.servings) > 0;
+  const servings = hasServings ? parseFloat(recipe.servings) : null;
+  // 1人前あたりの原価（人前未設定なら計算不可）
+  const costPerServing = servings ? totalCost / servings : null;
+  // 売価（1人前あたりの税込売価）
+  const price = recipe.price ? parseFloat(recipe.price) : null;
+  // 原価率 = 1人前原価 ÷ 1人前売価（人前・売価・原価すべて揃った時だけ）
+  let rate = null;
+  if (price && price > 0 && costPerServing && costPerServing > 0) {
+    rate = (costPerServing / price) * 100;
+  }
+  return {
+    totalCost,        // 仕込み量全体の原価
+    servings,         // 人前（未設定ならnull）
+    costPerServing,   // 1人前の原価（未設定ならnull）
+    price,            // 1人前の売価
+    rate,             // 原価率(%)（計算不可ならnull）
+    hasCost: c.items.filter(i => i.found).length > 0
+  };
+}
+
+// 原価率に応じた色を返す
+function rateColorSet(rate) {
+  if (rate === null || rate === undefined) return { bg:'#fafafa', col:'#999', label:'' };
+  if (rate <= 30) return { bg:'#E1F5EE', col:'#085041', label:'🟢 良好' };
+  if (rate <= 40) return { bg:'#FAEEDA', col:'#854F0B', label:'🟡 普通' };
+  return { bg:'#FFEBE9', col:'#791F1F', label:'🔴 高め' };
+}
+
 function subscribeRecipes() {
   if (S.unsubRecipes) S.unsubRecipes();
   S.unsubRecipes = window.fb.onSnapshot(
@@ -1891,13 +1926,10 @@ function renderMenu() {
   // 並び替え
   const sortMode = S.sortMode || 'default';
   if (sortMode !== 'default') {
-    // 各レシピの原価率を計算
+    // 各レシピの原価率を計算（1人前あたり）
     const getRate = (v) => {
-      const c = calcRecipeCost(v, 1);
-      const cv = c.totalRaw || c.total || 0;
-      const price = v.price ? parseFloat(v.price) : null;
-      if (!price || price <= 0 || cv <= 0) return null;
-      return (cv / price) * 100;
+      const r = calcRecipeRate(v);
+      return r.rate;
     };
     l = [...l].sort((a, b) => {
       if (sortMode === 'name') {
@@ -1954,17 +1986,11 @@ ${x.imgURL ? `<img src="${escapeHtml(x.imgURL)}" style="width:100%;height:140px;
 <div style="padding:10px 12px">
 <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><p style="margin:0;font-size:14px;font-weight:500;flex:1">${escapeHtml(x.name)}</p>${x.temp==='h'?'<span class="tg h">🔥 温</span>':x.temp==='c'?'<span class="tg c">❄️ 冷</span>':''}</div>
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px">${x.genre?`<span class="gb">${escapeHtml(gl(x.genre))}</span>`:''}${x.season&&x.season!=='all'?`<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:#EEEDFE;color:#3C3489;font-weight:500">${escapeHtml(sel(x.season))}</span>`:''}<span style="font-size:11px;color:#666">${escapeHtml(x.time||'')}</span>${(() => { const c = calcRecipeCost(x, 1); return c.items.filter(i=>i.found).length>0 ? `<span style="font-size:11px;color:#085041;font-weight:500">¥${fmtCost(c.totalRaw||c.total)}</span>` : ''; })()}${(() => {
-  // 原価率バッジ
-  const c = calcRecipeCost(x, 1);
-  const cv = c.totalRaw || c.total || 0;
-  const price = x.price ? parseFloat(x.price) : null;
-  if (!price || price <= 0 || cv <= 0) return '';
-  const rate = (cv / price) * 100;
-  let bg, col;
-  if (rate <= 30) { bg = '#E1F5EE'; col = '#085041'; }
-  else if (rate <= 40) { bg = '#FAEEDA'; col = '#854F0B'; }
-  else { bg = '#FFEBE9'; col = '#791F1F'; }
-  return `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:${bg};color:${col};font-weight:600">原価率 ${rate.toFixed(0)}%</span>`;
+  // 原価率バッジ（1人前あたり）
+  const r = calcRecipeRate(x);
+  if (r.rate === null) return '';
+  const cs = rateColorSet(r.rate);
+  return `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:${cs.bg};color:${cs.col};font-weight:600">原価率 ${r.rate.toFixed(0)}%</span>`;
 })()}</div>
 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px"><p style="margin:0;font-size:11px;color:#666">考案: ${escapeHtml(x.creator||'—')}</p>${using?'<span class="use-banner">⭐ 使用中</span>':''}${sho?`<span class="shr">🔗 ${(x.stores||[]).length}店舗</span>`:''}</div>
 </div></div>`;
@@ -2035,40 +2061,25 @@ ${(() => {
 ${(() => {
   const cost = calcRecipeCost(x, sc);
   if (cost.items.filter(i=>i.found).length === 0) return '';
-  const costVal = cost.totalRaw || cost.total || 0;
-  // 売価は仕込み倍率に応じて掛けない(売価は1食あたりなので)、原価/売価ではなく現在の原価率も別途見たい
-  // baseQtyに対する売価 vs 現在の原価で原価率を計算するか、1食分の比較かは複雑だが、
-  // ここではシンプルに「1倍時の売価 vs 1倍時の原価」で計算
-  const cost1x = calcRecipeCost(x, 1);
-  const cost1xVal = cost1x.totalRaw || cost1x.total || 0;
-  // 売価との比較は、人前があれば1人前あたりで、なければ仕込み全体で
-  const servings = x.servings && x.servings > 0 ? x.servings : 1;
-  const costPerServing = cost1xVal / servings;
-  const price = x.price ? parseFloat(x.price) : null;
-  let rate = null;
-  let rateColor = '#085041';
-  let rateBg = '#E1F5EE';
-  let rateLabel = '';
-  if (price && price > 0 && costPerServing > 0) {
-    rate = (costPerServing / price) * 100;
-    if (rate <= 30) { rateColor = '#085041'; rateBg = '#E1F5EE'; rateLabel = '🟢 良好'; }
-    else if (rate <= 40) { rateColor = '#854F0B'; rateBg = '#FAEEDA'; rateLabel = '🟡 普通'; }
-    else { rateColor = '#791F1F'; rateBg = '#FFEBE9'; rateLabel = '🔴 高め'; }
-  }
+  // 共通関数で1人前ベースの原価率を計算
+  const r = calcRecipeRate(x);
+  const hasServings = x.servings && parseFloat(x.servings) > 0;
+  const cs = rateColorSet(r.rate);
   return `<div style="background:#E1F5EE;border-radius:10px;padding:12px 14px;margin-bottom:14px;border:1px solid #5DCAA5">
 <div style="display:flex;justify-content:space-between;align-items:center">
 <div><p style="margin:0;font-size:11px;color:#085041;font-weight:500">💰 原価合計（この仕込み量）</p><p style="margin:2px 0 0;font-size:22px;font-weight:600;color:#085041">¥${fmtCost(cost.totalRaw||cost.total)}</p></div>
 ${cost.unknown > 0 ? `<div style="text-align:right"><p style="margin:0;font-size:10px;color:#854F0B;font-weight:500">⚠️ 未登録 ${cost.unknown}件</p><p style="margin:2px 0 0;font-size:9px;color:#854F0B">登録済み食材で登録してください</p></div>` : ''}
 </div>
-${x.servings && x.servings > 0 ? `<div style="margin-top:10px;padding:8px 10px;background:#fff;border-radius:6px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-<div style="text-align:center"><p style="margin:0;font-size:10px;color:#666">1人前の量</p><p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#412402">${fmtCost(((x.baseQty||1000) * sc) / x.servings)}${escapeHtml(x.baseUnit||'g')}</p></div>
-<div style="text-align:center"><p style="margin:0;font-size:10px;color:#666">1人前の原価</p><p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#085041">¥${fmtCost((cost.totalRaw||cost.total) / x.servings)}</p></div>
+${hasServings ? `<div style="margin-top:10px;padding:8px 10px;background:#fff;border-radius:6px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#666">1人前の量</p><p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#412402">${fmtCost(((x.baseQty||1000) * sc) / parseFloat(x.servings))}${escapeHtml(x.baseUnit||'g')}</p></div>
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#666">1人前の原価</p><p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#085041">¥${fmtCost((cost.totalRaw||cost.total) / parseFloat(x.servings))}</p></div>
 </div>` : ''}
-${price && rate !== null ? `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #5DCAA5;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-<div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">1人前原価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${fmtCost(costPerServing)}</p></div>
-<div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">売価(税込)</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${price.toLocaleString()}</p></div>
-<div style="text-align:center;background:${rateBg};border-radius:6px;padding:2px"><p style="margin:0;font-size:10px;color:${rateColor}">原価率</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:${rateColor}">${rate.toFixed(1)}% ${rateLabel}</p></div>
+${hasServings && r.price && r.rate !== null ? `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #5DCAA5;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">1人前原価</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${fmtCost(r.costPerServing)}</p></div>
+<div style="text-align:center"><p style="margin:0;font-size:10px;color:#085041">売価(税込)</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#085041">¥${r.price.toLocaleString()}</p></div>
+<div style="text-align:center;background:${cs.bg};border-radius:6px;padding:2px"><p style="margin:0;font-size:10px;color:${cs.col}">原価率</p><p style="margin:2px 0 0;font-size:14px;font-weight:600;color:${cs.col}">${r.rate.toFixed(1)}% ${cs.label}</p></div>
 </div>` : ''}
+${!hasServings && r.price ? `<div style="margin-top:10px;padding:8px 10px;background:#FAEEDA;border-radius:6px;font-size:11px;color:#854F0B;line-height:1.4">⚠️ 原価率を計算するには「何人前」の登録が必要です。レシピ編集画面で人前を入力してください。</div>` : ''}
 </div>`;
 })()}
 <button class="btn-p" data-a="pr" style="background:#0C447C;margin-bottom:14px">🖨 現在の倍率で印刷</button>
@@ -2235,11 +2246,12 @@ ${perCost !== null ? `<span style="color:#085041">¥${fmtCost(perCost)}</span>` 
   return `<div class="fi" style="display:flex;align-items:center;background:${hasItems?'#E1F5EE':'#fafafa'};border-color:${hasItems?'#5DCAA5':'#ddd'};padding:8px 12px;color:${hasItems?'#085041':'#999'};font-weight:${hasItems?'600':'400'};font-size:14px">${hasItems ? `¥${fmtCost(cost.totalRaw||cost.total)}` : '材料に登録済み食材を連動させると自動表示'}</div>`;
 })()}</div></div>
 ${(() => {
-  // 売価・原価率の計算（人前があれば1人前原価で）
+  // 売価・原価率の計算（1人前ベース）
   const tempRecipe = { ingredients: f.ingredients || [] };
   const cost = calcRecipeCost(tempRecipe, 1);
   const costVal = cost.totalRaw || cost.total || 0;
-  const servings = parseFloat(f.servings) > 0 ? parseFloat(f.servings) : 1;
+  const hasServings = parseFloat(f.servings) > 0;
+  const servings = hasServings ? parseFloat(f.servings) : 1;
   const costPerServing = costVal / servings;
   const price = parseFloat(f.price);
   const hasPrice = !isNaN(price) && price > 0;
@@ -2249,20 +2261,22 @@ ${(() => {
   let rateBg = '#fafafa';
   let rateBorder = '#ddd';
   let rateLabel = '';
-  if (hasPrice && hasCost) {
+  // 原価率は「人前」と「売価」両方ある時だけ計算
+  if (hasPrice && hasCost && hasServings) {
     rate = (costPerServing / price) * 100;
-    if (rate <= 30) { rateColor = '#085041'; rateBg = '#E1F5EE'; rateBorder = '#5DCAA5'; rateLabel = '🟢 良好'; }
-    else if (rate <= 40) { rateColor = '#854F0B'; rateBg = '#FAEEDA'; rateBorder = '#E5C893'; rateLabel = '🟡 普通'; }
-    else { rateColor = '#791F1F'; rateBg = '#FFEBE9'; rateBorder = '#F7C1C1'; rateLabel = '🔴 高め'; }
+    const cs = rateColorSet(rate);
+    rateColor = cs.col; rateBg = cs.bg; rateLabel = cs.label;
+    rateBorder = rate <= 30 ? '#5DCAA5' : rate <= 40 ? '#E5C893' : '#F7C1C1';
   }
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
 <div><label class="lb">売価（税込み）</label><input class="fi" type="number" step="1" data-f="price" value="${f.price===undefined||f.price===null||f.price===''?'':f.price}" placeholder="例: 1200"></div>
 <div><label class="lb">原価率（自動計算）</label>
 <div class="fi" style="display:flex;align-items:center;justify-content:space-between;background:${rateBg};border-color:${rateBorder};padding:8px 12px;color:${rateColor};font-weight:600;font-size:14px">
-${rate !== null ? `<span>${rate.toFixed(1)}%</span><span style="font-size:11px;font-weight:500">${rateLabel}</span>` : `<span style="font-weight:400;font-size:12px;color:#999">売価を入力</span>`}
+${rate !== null ? `<span>${rate.toFixed(1)}%</span><span style="font-size:11px;font-weight:500">${rateLabel}</span>` : `<span style="font-weight:400;font-size:12px;color:#999">${!hasPrice?'売価を入力':!hasServings?'人前を入力':'材料を登録'}</span>`}
 </div>
 </div>
-</div>`;
+</div>
+${hasPrice && !hasServings ? `<p style="margin:6px 0 0;font-size:11px;color:#854F0B;background:#FAEEDA;padding:6px 10px;border-radius:6px;line-height:1.4">⚠️ 原価率の計算には「何人前」の入力が必要です（上の「人前」欄）</p>` : ''}`;
 })()}
 <label class="lb">アレルギー</label>
 <div style="display:flex;gap:5px;flex-wrap:wrap">${ALG.map(a=>`<button class="cb ${f.allergy.includes(a)?'on':''}" data-a="fa-form" data-x="${a}">${a}</button>`).join('')}</div>
@@ -2981,9 +2995,20 @@ function bind() {
 
   root.querySelectorAll('[data-f]').forEach(el => {
     if (el.dataset.f === 'q') return; // 検索は別ハンドラで処理済み
+    
+    // IME変換中フラグ（全入力欄共通）
+    el.addEventListener('compositionstart', () => { el.dataset.composing = '1'; });
+    el.addEventListener('compositionend', () => { 
+      el.dataset.composing = '0'; 
+      // 変換確定後、oninputを手動で呼んで反映
+      if (el.oninput) el.oninput();
+    });
+    
     el.oninput = () => {
       const f = el.dataset.f;
       const i = parseInt(el.dataset.i);
+      // IME変換中は一切の処理をスキップ（変換が壊れるのを防ぐ）
+      const isComposing = el.dataset.composing === '1';
       if (f === 'pw') { S.pwInput = el.value; return; }
       if (f === 'admin-pw') { S.adminPwInput = el.value; return; }
       if (f === 'new-pw') { S.newPwInput = el.value; return; }
@@ -3030,15 +3055,16 @@ function bind() {
         S.form.ingredients[i].name = el.value; 
         S.acIngIdx = i; // オートコンプリート対象を記録
         // IME変換中はrender()しない（変換が壊れるため）
-        if (el.dataset.composing === '1') return;
+        if (isComposing) return;
         // 材料名変更時、デバウンスで原価を再計算（フォーカス維持のため）
         clearTimeout(S.costUpdateTimer);
-        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 400);
+        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 500);
       }
       else if (f==='ing-value') { 
         S.form.ingredients[i].value = el.value===''?null:parseFloat(el.value); 
+        if (isComposing) return;
         clearTimeout(S.costUpdateTimer);
-        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 400);
+        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 500);
       }
       else if (f==='ing-unit') { 
         S.form.ingredients[i].unit = el.value; 
@@ -3046,30 +3072,34 @@ function bind() {
       }
       else if (f==='ing-mcost') {
         S.form.ingredients[i].manualCost = el.value === '' ? '' : parseFloat(el.value);
+        if (isComposing) return;
         clearTimeout(S.costUpdateTimer);
-        S.costUpdateTimer = setTimeout(() => render(), 400);
+        S.costUpdateTimer = setTimeout(() => render(), 500);
       }
-      else if (f==='step-text') S.form.steps[i].text = el.value;
-      else if (f==='step-time') S.form.steps[i].time = el.value;
-      else if (f==='step-temp') S.form.steps[i].temp = el.value;
-      else if (f==='step-note') S.form.steps[i].note = el.value;
+      else if (f==='step-text') { S.form.steps[i].text = el.value; }
+      else if (f==='step-time') { S.form.steps[i].time = el.value; }
+      else if (f==='step-temp') { S.form.steps[i].temp = el.value; }
+      else if (f==='step-note') { S.form.steps[i].note = el.value; }
       else if (f==='price') {
         S.form.price = el.value === '' ? '' : parseFloat(el.value);
+        if (isComposing) return;
         // 原価率の表示を更新（フォーカス維持）
         clearTimeout(S.costUpdateTimer);
-        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 300);
+        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 400);
       }
       else if (f==='servings') {
         S.form.servings = el.value === '' ? '' : parseFloat(el.value);
+        if (isComposing) return;
         clearTimeout(S.costUpdateTimer);
-        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 300);
+        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 400);
       }
       else if (f==='baseQty') {
         S.form.baseQty = el.value === '' ? '' : parseFloat(el.value);
+        if (isComposing) return;
         clearTimeout(S.costUpdateTimer);
-        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 300);
+        S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 400);
       }
-      else S.form[f] = el.value;
+      else { S.form[f] = el.value; }
     };
   });
   // 提供店舗チェックボックスの専用ハンドラ
@@ -3387,6 +3417,12 @@ function updateCostDisplay() {
   if (!S.form || S.sc !== 'form') return;
   // 入力中フィールドのフォーカスを記録
   const focused = document.activeElement;
+  // IME変換中の入力欄があれば、render()を遅延（変換が壊れるのを防ぐ）
+  if (focused && focused.dataset && focused.dataset.composing === '1') {
+    clearTimeout(S.costUpdateTimer);
+    S.costUpdateTimer = setTimeout(() => updateCostDisplay(), 300);
+    return;
+  }
   const fInfo = focused && focused.dataset ? {
     f: focused.dataset.f,
     i: focused.dataset.i,
