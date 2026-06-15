@@ -217,6 +217,7 @@ const S = {
   bulkProgress: null,
   openIng: null,
   sortMode: 'default',
+  visibleCount: 20,
   pwInput: '', pwError: '', warningSeen: false,
   config: null, stores: [], recipes: [],
   currentStore: null, tab: 'grill', rec: null, scale: 1,
@@ -506,10 +507,52 @@ function subscribeRecipes() {
   );
 }
 
+// 画像を圧縮する関数
+async function compressImage(file, maxSize = 1280, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      resolve(file); // 画像じゃないならそのまま
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // リサイズ後のサイズを計算
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * (maxSize / w)); w = maxSize; }
+          else { w = Math.round(w * (maxSize / h)); h = maxSize; }
+        }
+        // canvasで描画
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        // Blobに変換（JPEG圧縮）
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(file); return; }
+          const origKB = (file.size / 1024).toFixed(0);
+          const newKB = (blob.size / 1024).toFixed(0);
+          console.log(`[画像圧縮] ${origKB}KB → ${newKB}KB (${Math.round(blob.size/file.size*100)}%)`);
+          resolve(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
 async function uploadPhoto(file, path) {
   if (!file) return null;
+  // アップロード前に圧縮
+  const compressed = await compressImage(file, 1280, 0.8);
   const storageRef = window.fb.ref(window.fb.storage, path);
-  await window.fb.uploadBytes(storageRef, file);
+  await window.fb.uploadBytes(storageRef, compressed);
   return await window.fb.getDownloadURL(storageRef);
 }
 
@@ -1977,12 +2020,16 @@ ${tabsToShow.map(t => `<button class="tb ${S.tab===t.i?'on':''}" data-a="tab" da
 ${S.filterOpen ? renderFilterPanel(fc) : ''}
 <div style="padding:14px 18px 100px;display:grid;gap:12px">
 ${l.length === 0 ? `<p style="text-align:center;color:#999;font-size:13px;padding:30px 0">${fc||S.q?'条件に合うレシピがありません':'レシピがありません'}<br><span style="font-size:11px">右下の＋から登録できます</span></p>` :
-  l.map(x => {
+  (() => {
+    const visible = S.visibleCount || 20;
+    const shown = l.slice(0, visible);
+    const hasMore = l.length > visible;
+    return shown.map(x => {
     const using = (x.inUse || []).includes(S.currentStore);
     const sho = (x.stores || []).length > 1;
     return `<div class="cd ${x.temp==='h'?'h':x.temp==='c'?'c':'n'}" data-a="dt" data-x="${x.id}">
 <button class="usemark ${using?'on':''}" data-a="tu" data-x="${x.id}" data-stop="1"><span>${using?'⭐':'☆'}</span></button>
-${x.imgURL ? `<img src="${escapeHtml(x.imgURL)}" style="width:100%;height:140px;object-fit:cover;display:block">` : `<div style="height:120px;background:#f1efe8;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:32px">📷</div>`}
+${x.imgURL ? `<img src="${escapeHtml(x.imgURL)}" loading="lazy" style="width:100%;height:140px;object-fit:cover;display:block">` : `<div style="height:120px;background:#f1efe8;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:32px">📷</div>`}
 <div style="padding:10px 12px">
 <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><p style="margin:0;font-size:14px;font-weight:500;flex:1">${escapeHtml(x.name)}</p>${x.temp==='h'?'<span class="tg h">🔥 温</span>':x.temp==='c'?'<span class="tg c">❄️ 冷</span>':''}</div>
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px">${x.genre?`<span class="gb">${escapeHtml(gl(x.genre))}</span>`:''}${x.season&&x.season!=='all'?`<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:#EEEDFE;color:#3C3489;font-weight:500">${escapeHtml(sel(x.season))}</span>`:''}<span style="font-size:11px;color:#666">${escapeHtml(x.time||'')}</span>${(() => { const c = calcRecipeCost(x, 1); return c.items.filter(i=>i.found).length>0 ? `<span style="font-size:11px;color:#085041;font-weight:500">¥${fmtCost(c.totalRaw||c.total)}</span>` : ''; })()}${(() => {
@@ -1994,7 +2041,8 @@ ${x.imgURL ? `<img src="${escapeHtml(x.imgURL)}" style="width:100%;height:140px;
 })()}</div>
 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px"><p style="margin:0;font-size:11px;color:#666">考案: ${escapeHtml(x.creator||'—')}</p>${using?'<span class="use-banner">⭐ 使用中</span>':''}${sho?`<span class="shr">🔗 ${(x.stores||[]).length}店舗</span>`:''}</div>
 </div></div>`;
-  }).join('')}
+  }).join('') + (hasMore ? `<div id="load-more-sentinel" style="grid-column:1/-1;text-align:center;padding:14px"><button data-a="load-more" style="background:#fff;border:1px solid #5DCAA5;color:#085041;border-radius:8px;padding:10px 24px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500">▼ もっと見る (${l.length - visible}件)</button></div>` : `<div style="grid-column:1/-1;text-align:center;padding:10px;color:#999;font-size:11px">全${l.length}件を表示中</div>`);
+  })()}
 </div>
 ${S.currentStore === '__all__' ? '' : '<button class="fa" data-a="op" aria-label="新規登録">＋</button>'}`;
 }
@@ -2157,7 +2205,7 @@ ${s.note?`<p style="margin:6px 0 0;font-size:11px;color:#854F0B;background:#FAEE
 ${s.time?`<span class="step-meta-item time">⏱ ${escapeHtml(s.time)}</span>`:''}
 ${s.temp?`<span class="step-meta-item heat">🔥 ${escapeHtml(s.temp)}</span>`:''}
 </div>
-${s.photoURL?`<img src="${escapeHtml(s.photoURL)}" style="width:100%;height:140px;object-fit:cover;border-radius:8px;margin-top:8px">`:''}
+${s.photoURL?`<img src="${escapeHtml(s.photoURL)}" loading="lazy" style="width:100%;height:140px;object-fit:cover;border-radius:8px;margin-top:8px">`:''}
 </div>`).join('')}
 </div>`:''}
 </div>
@@ -2784,6 +2832,8 @@ function bind() {
       else if (a === 'ssel') { 
         S.currentStore = v; 
         S.tab = (v==='shumai'||v==='__all__') ? 'all' : 'grill'; 
+        S.visibleCount = 20;
+        S.sortMode = 'default';
         S.sc = 'menu'; 
         render(); 
       }
@@ -2796,17 +2846,19 @@ function bind() {
         }
         S.sc = 'stores'; S.q=''; S.fg=[]; S.fse=[]; S.ft='all'; S.fa=[]; S.filterOpen=false; render(); 
       }
-      else if (a === 'tab') { S.tab = v; render(); }
+      else if (a === 'tab') { S.tab = v; S.visibleCount = 20; render(); }
       else if (a === 'tf') { S.filterOpen = !S.filterOpen; render(); }
-      else if (a === 'fg') { S.fg = S.fg.includes(v)?S.fg.filter(y=>y!==v):[...S.fg,v]; render(); }
-      else if (a === 'fse') { S.fse = S.fse.includes(v)?S.fse.filter(y=>y!==v):[...S.fse,v]; render(); }
-      else if (a === 'ft') { S.ft = v; render(); }
-      else if (a === 'fa') { S.fa = S.fa.includes(v)?S.fa.filter(y=>y!==v):[...S.fa,v]; render(); }
-      else if (a === 'cf') { S.fg=[]; S.fse=[]; S.ft='all'; S.fa=[]; render(); }
+      else if (a === 'fg') { S.fg = S.fg.includes(v)?S.fg.filter(y=>y!==v):[...S.fg,v]; S.visibleCount = 20; render(); }
+      else if (a === 'fse') { S.fse = S.fse.includes(v)?S.fse.filter(y=>y!==v):[...S.fse,v]; S.visibleCount = 20; render(); }
+      else if (a === 'ft') { S.ft = v; S.visibleCount = 20; render(); }
+      else if (a === 'fa') { S.fa = S.fa.includes(v)?S.fa.filter(y=>y!==v):[...S.fa,v]; S.visibleCount = 20; render(); }
+      else if (a === 'cf') { S.fg=[]; S.fse=[]; S.ft='all'; S.fa=[]; S.visibleCount = 20; render(); }
+      else if (a === 'load-more') { S.visibleCount = (S.visibleCount || 20) + 20; render(); }
       else if (a === 'dt') { S.rec = v; S.scale = 1; S.history=[]; S.open={ing:true,proc:false,stor:false}; S.sc = 'detail'; render(); }
       else if (a === 'goto') { S.history.push(S.rec); S.rec = v; S.scale=1; S.open={ing:true,proc:false,stor:false}; render(); }
       else if (a === 'sort') {
         S.sortMode = v;
+        S.visibleCount = 20;
         render();
       }
       else if (a === 'toggle-ing-detail') {
@@ -3410,6 +3462,21 @@ function bind() {
       }
     };
   }
+  
+  // ページネーション: 下端の「もっと見る」要素が画面に入ったら自動で追加読み込み
+  const sentinel = root.querySelector('#load-more-sentinel');
+  if (sentinel && 'IntersectionObserver' in window) {
+    if (S.scrollObserver) S.scrollObserver.disconnect();
+    S.scrollObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          S.visibleCount = (S.visibleCount || 20) + 20;
+          render();
+        }
+      });
+    }, { rootMargin: '200px' });
+    S.scrollObserver.observe(sentinel);
+  }
 }
 
 // レシピフォーム編集中、原価表示だけをDOMで直接更新（フォーカス維持）
@@ -3451,6 +3518,8 @@ function updateCostDisplay() {
 function renderSearchResults() {
   // メニュー画面でのみ動作
   if (S.sc !== 'menu') return;
+  // 検索クエリが変わったらページネーションをリセット
+  S.visibleCount = 20;
   // 検索結果リストの親要素を探して、リスト部分だけ差し替え
   // 通常のrender()を呼んで、入力欄のフォーカス・カーソル位置を復元
   const focused = document.activeElement;
