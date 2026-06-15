@@ -107,8 +107,86 @@ body{background:#fff}
 </head>
 <body>
 <div class="app" id="app">
-<div class="loader-page"><div class="spinner"></div><p>読み込み中...</p></div>
+<div class="loader-page" style="min-height:100vh">
+<div style="text-align:center">
+<div style="width:64px;height:64px;background:linear-gradient(135deg,#085041,#0a6b54);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:32px">🍳</div>
+<p style="margin:0 0 4px;font-size:14px;color:#412402;font-weight:600">Sanpo-Works</p>
+<p style="margin:0 0 18px;font-size:11px;color:#666">レシピ・調理工程マニュアル</p>
+<div class="spinner"></div>
+<p style="margin:14px 0 0;font-size:11px;color:#666" id="loadingStatus">起動中...</p>
 </div>
+</div>
+</div>
+
+<script>
+// ====== Service Worker（オフライン＆高速起動キャッシュ） ======
+if ('serviceWorker' in navigator) {
+  // インラインSWを Blob URL で登録する（外部ファイル不要）
+  const swCode = `
+    const CACHE_NAME = 'recipe-app-v3';
+    const CACHE_URLS = [
+      'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js',
+      'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js',
+      'https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js'
+    ];
+    
+    self.addEventListener('install', (e) => {
+      self.skipWaiting();
+      e.waitUntil(
+        caches.open(CACHE_NAME).then(cache => cache.addAll(CACHE_URLS).catch(()=>{}))
+      );
+    });
+    
+    self.addEventListener('activate', (e) => {
+      e.waitUntil(
+        caches.keys().then(keys => Promise.all(
+          keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        )).then(() => self.clients.claim())
+      );
+    });
+    
+    self.addEventListener('fetch', (e) => {
+      const url = e.request.url;
+      // Firebaseのライブラリだけキャッシュ優先（cache-first）
+      if (url.includes('gstatic.com/firebasejs')) {
+        e.respondWith(
+          caches.match(e.request).then(res => {
+            if (res) return res;
+            return fetch(e.request).then(fetchRes => {
+              const clone = fetchRes.clone();
+              caches.open(CACHE_NAME).then(c => c.put(e.request, clone)).catch(()=>{});
+              return fetchRes;
+            }).catch(() => res);
+          })
+        );
+        return;
+      }
+      // recipe.html自体も次回素早く起動できるようキャッシュ（stale-while-revalidate）
+      if (url.endsWith('/recipe.html') || url.endsWith('/')) {
+        e.respondWith(
+          caches.match(e.request).then(cached => {
+            const fetchPromise = fetch(e.request).then(networkRes => {
+              const clone = networkRes.clone();
+              caches.open(CACHE_NAME).then(c => c.put(e.request, clone)).catch(()=>{});
+              return networkRes;
+            }).catch(() => cached);
+            return cached || fetchPromise;
+          })
+        );
+        return;
+      }
+      // それ以外（Firebaseデータ通信など）は通常通り
+    });
+  `;
+  const blob = new Blob([swCode], { type: 'text/javascript' });
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl, { scope: './' }).then(reg => {
+    console.log('[SW] 登録成功', reg.scope);
+  }).catch(err => {
+    console.warn('[SW] 登録失敗（問題なし）:', err);
+  });
+}
+</script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
@@ -3539,12 +3617,34 @@ function renderSearchResults() {
 }
 
 window.appInit = async function() {
-  await loadConfig();
-  await loadStores();
-  await loadIngCategories();
-  await loadIngredients();
-  S.sc = 'login';
-  render();
+  const setStatus = (msg) => {
+    const el = document.getElementById('loadingStatus');
+    if (el) el.textContent = msg;
+  };
+  try {
+    setStatus('設定を読み込み中...');
+    await loadConfig();
+    setStatus('店舗情報を読み込み中...');
+    await loadStores();
+    // 食材データはログイン後に読み込む（起動を速くするため）
+    setStatus('完了');
+    S.sc = 'login';
+    render();
+    // バックグラウンドで食材データを先読み（ログイン後にすぐ使えるように）
+    setTimeout(async () => {
+      try {
+        await loadIngCategories();
+        await loadIngredients();
+        console.log('[起動] 食材データのバックグラウンド読み込み完了');
+      } catch(e) {
+        console.warn('[起動] 食材データの読み込み失敗（ログイン後に再試行）:', e);
+      }
+    }, 100);
+  } catch (e) {
+    console.error('[appInit] エラー:', e);
+    setStatus('読み込みエラー: ' + e.message);
+    setTimeout(() => { S.sc = 'login'; render(); }, 3000);
+  }
 };
 
 // 店舗選択（onclick属性から直接呼ばれる確実な実装）
