@@ -1228,14 +1228,11 @@ function renderRadarCards(){
     // 名刺スタイル個別カード (2列グリッド、人事評価シート風)
     html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">`;
     staffData.forEach(d=>{
-      const evalIds=S.evals.filter(e=>e.target_staff_id===d.member.id&&(!S.periodId||e.period_id===S.periodId)).map(e=>e.id);
-      const myTraits=S.evalTraits.filter(t=>evalIds.includes(t.evaluation_id));
-      const traitNames=[...new Set(myTraits.map(t=>t.trait_name).filter(Boolean))];
-      const traitBadges=traitNames.map(name=>{
-        const t=myTraits.find(x=>x.trait_name===name);
-        const score=t?Number(t.score||0):0;
-        return{label:name,score};
-      });
+      // 特殊能力: S.abilitiesから取得 (employee_special_abilitiesテーブル)
+      const myAbilities=(S.abilities||[]).filter(a=>
+        a.target_staff_id===d.member.id&&(!S.periodId||a.period_id===S.periodId)
+      );
+      const traitBadges=myAbilities.map(a=>({label:a.label,score:Number(a.score||0)}));
       const ss=getStaffStores(d.member.id);
       const baseScore=d.baseScore||0; // 6軸合計×4 (最大120)
       const totalScore=Math.max(0,Math.round((baseScore+d.traitScore)*10)/10); // 補正点込み
