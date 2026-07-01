@@ -72,7 +72,7 @@ let S={
   tab:'list',loading:true,
   stores:[],periods:[],members:[],traits:[],evals:[],
   sections:[],items:[],rankSettings:[],
-  search:'',storeF:'all',editId:null,
+  search:'',storeF:'all',periodF:'all',sortBy:'diff',editId:null,
   form:{memberId:'',storeId:'',periodId:'',evaluator:'',vals:{},selTraits:[],good:'',improve:'',goal:''},
   newStore:'',newMemberName:'',newMemberStore:'',newPeriod:'',
   newTrait:'',newTraitScore:2,
@@ -216,7 +216,7 @@ function copyUrl(){
 }
 
 function render(){
-  const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF}=S;
+  const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF,periodF,sortBy}=S;
   if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
 
   const base=calcScore(form.vals);
@@ -225,19 +225,68 @@ function render(){
   const tScore=form.selTraits.reduce((s,t)=>s+(traits.find(o=>o.name===t)?.score||0),0);
   const maxScore=items.length*4;
 
-  const filtered=evals.filter(e=>{
-    const ok=storeF==='all'||e.store_id===storeF;
+  // デフォルトで最新期間を選択
+  if(periodF==='all'&&periods.length>0&&!S._periodInited){
+    S.periodF=periods[0].id;S._periodInited=true;
+  }
+  const effPeriodF=S.periodF;
+
+  // フィルタ適用
+  const preFiltered=evals.filter(e=>{
+    const okStore=storeF==='all'||e.store_id===storeF;
+    const okPeriod=effPeriodF==='all'||e.period_id===effPeriodF;
     const q=search.trim();
     const name=e.staff_members?.name||'';
     const store=(stores.find(s=>s.id===e.store_id)||{}).name||'';
     const period=(periods.find(p=>p.id===e.period_id)||{}).label||'';
-    return ok&&(!q||[name,store,period,e.evaluator_name].some(v=>(v||'').includes(q)));
-  }).sort((a,b)=>b.base_score-a.base_score);
+    return okStore&&okPeriod&&(!q||[name,store,period,e.evaluator_name].some(v=>(v||'').includes(q)));
+  });
 
-  const total=filtered.length;
-  const avg=total?Math.round(filtered.reduce((s,e)=>s+e.base_score,0)/total*10)/10:0;
+  // スタッフ×期間でグループ化 → {memberId, periodId, storeId, self, manager}
+  const groupMap=new Map();
+  preFiltered.forEach(e=>{
+    const key=(e.staff_member_id||'')+'|'+(e.period_id||'');
+    if(!groupMap.has(key)){
+      groupMap.set(key,{
+        memberId:e.staff_member_id,periodId:e.period_id,storeId:e.store_id,
+        staffName:e.staff_members?.name||'未設定',
+        self:null,manager:null
+      });
+    }
+    const g=groupMap.get(key);
+    if(e.evaluation_type==='self'){
+      // 同じ人が複数回自己採点した場合は最新のものを使う
+      if(!g.self||new Date(e.created_at||0)>new Date(g.self.created_at||0))g.self=e;
+    }else{
+      if(!g.manager||new Date(e.created_at||0)>new Date(g.manager.created_at||0))g.manager=e;
+    }
+  });
+  const grouped=Array.from(groupMap.values());
+
+  // ソート
+  grouped.sort((a,b)=>{
+    const aDiff=(a.manager?.base_score||0)-(a.self?.base_score||0);
+    const bDiff=(b.manager?.base_score||0)-(b.self?.base_score||0);
+    const aMax=Math.max(a.self?.base_score||0,a.manager?.base_score||0);
+    const bMax=Math.max(b.self?.base_score||0,b.manager?.base_score||0);
+    if(sortBy==='diff')return Math.abs(bDiff)-Math.abs(aDiff);
+    if(sortBy==='name')return a.staffName.localeCompare(b.staffName,'ja');
+    return bMax-aMax; // 'score'
+  });
+
+  // 統計(グループ単位)
+  const total=grouped.length;
+  const allScores=[];
+  grouped.forEach(g=>{
+    if(g.self)allScores.push(g.self.base_score);
+    if(g.manager)allScores.push(g.manager.base_score);
+  });
+  const avg=allScores.length?Math.round(allScores.reduce((s,v)=>s+v,0)/allScores.length*10)/10:0;
   const sRank=rankSettings.find(r=>r.rank==='S');
-  const sCount=sRank?filtered.filter(e=>e.base_score>=sRank.min_score).length:0;
+  const sCount=sRank?allScores.filter(sc=>sc>=sRank.min_score).length:0;
+
+  // filtered は後方互換のためグループ化前のリストを保持
+  const filtered=preFiltered;
 
   const rulebookHtml=`<div class="rulebook">
     <div style="font-size:14px;font-weight:900;margin-bottom:10px">📖 査定ルールブック</div>
@@ -295,51 +344,102 @@ function render(){
 
   // ===== 一覧 =====
   if(tab==='list'){
-    html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <input style="flex:1;min-width:140px" placeholder="名前・店舗で検索" value="${search}" oninput="S.search=this.value;render()">
+      <select style="width:auto;min-width:130px" onchange="S.periodF=this.value;S._periodInited=true;render()">
+        <option value="all" ${periodF==='all'?'selected':''}>全期間</option>
+        ${periods.map(p=>`<option value="${p.id}" ${periodF===p.id?'selected':''}>${p.label}</option>`).join('')}
+      </select>
       <select style="width:auto;min-width:100px" onchange="S.storeF=this.value;render()">
         <option value="all">全店舗</option>
         ${stores.map(s=>`<option value="${s.id}" ${storeF===s.id?'selected':''}>${s.name}</option>`).join('')}
       </select>
+      <select style="width:auto;min-width:110px" onchange="S.sortBy=this.value;render()">
+        <option value="diff" ${sortBy==='diff'?'selected':''}>差分順</option>
+        <option value="score" ${sortBy==='score'?'selected':''}>スコア順</option>
+        <option value="name" ${sortBy==='name'?'selected':''}>名前順</option>
+      </select>
       <button class="btn btn-primary btn-sm" onclick="S.tab='new';S.editId=null;S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">＋ 新規</button>
     </div>`;
-    if(!filtered.length){
+
+    if(!grouped.length){
       html+=`<div class="card" style="padding:40px;text-align:center">
         <div style="font-size:36px;margin-bottom:10px">📋</div>
         <div style="font-weight:900;color:#64748b">評価データがありません</div>
         <button class="btn btn-primary" style="margin-top:14px" onclick="S.tab='new';render()">評価を入力する</button>
       </div>`;
     }else{
-      filtered.forEach(ev=>{
-        const sName=(stores.find(s=>s.id===ev.store_id)||{}).name||'未設定';
-        const pLabel=(periods.find(p=>p.id===ev.period_id)||{}).label||'未設定';
-        const stName=ev.staff_members?.name||'未設定';
-        const evT=ev.evaluation_traits||[];
+      grouped.forEach(g=>{
+        const sName=(stores.find(s=>s.id===g.storeId)||{}).name||'未設定';
+        const pLabel=(periods.find(p=>p.id===g.periodId)||{}).label||'未設定';
+        const self=g.self,mgr=g.manager;
+        const selfScore=self?self.base_score:null;
+        const mgrScore=mgr?mgr.base_score:null;
+        const diff=(selfScore!==null&&mgrScore!==null)?(mgrScore-selfScore):null;
+        const bigGap=diff!==null&&Math.abs(diff)>=10;
+        const diffColor=diff===null?'#94a3b8':(diff>0?'#2563eb':(diff<0?'#dc2626':'#0f172a'));
+        const diffSign=diff===null?'—':(diff>0?'+'+diff:''+diff);
+
+        // 各セルのHTML
+        const cellSelf=self?`
+          <div style="text-align:center">
+            <div class="rank-badge" style="background:${rankBg(self.rank)};margin:0 auto 4px">${self.rank}</div>
+            <div style="font-size:20px;font-weight:900;line-height:1">${self.base_score}<span style="font-size:11px;color:#64748b;font-weight:700">点</span></div>
+            <div style="font-size:10px;font-weight:700;color:#ea580c;margin-top:2px">${self.pay_delta>0?'+'+self.pay_delta+'円':'—'}</div>
+          </div>`:`
+          <div style="text-align:center;padding:12px 0">
+            <div style="font-size:11px;color:#94a3b8;font-weight:700">未入力</div>
+          </div>`;
+        const cellMgr=mgr?`
+          <div style="text-align:center">
+            <div class="rank-badge" style="background:${rankBg(mgr.rank)};margin:0 auto 4px">${mgr.rank}</div>
+            <div style="font-size:20px;font-weight:900;line-height:1">${mgr.base_score}<span style="font-size:11px;color:#64748b;font-weight:700">点</span></div>
+            <div style="font-size:10px;font-weight:700;color:#ea580c;margin-top:2px">${mgr.pay_delta>0?'+'+mgr.pay_delta+'円':'—'}</div>
+          </div>`:`
+          <div style="text-align:center;padding:12px 0">
+            <div style="font-size:11px;color:#94a3b8;font-weight:700">未入力</div>
+          </div>`;
+        const cellDiff=`
+          <div style="text-align:center">
+            <div style="font-size:9px;font-weight:900;color:#64748b;margin-bottom:2px">差分</div>
+            <div style="font-size:22px;font-weight:900;color:${diffColor};line-height:1">${diffSign}</div>
+            ${bigGap?`<div style="font-size:9px;font-weight:900;color:#dc2626;margin-top:3px">⚠️ 要確認</div>`:''}
+          </div>`;
+
         html+=`<div class="ev-card">
           <div class="ev-header">
             <div style="flex:1">
-              <div style="font-size:16px;font-weight:900">${stName}</div>
+              <div style="font-size:16px;font-weight:900">${g.staffName}</div>
               <div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${sName} / ${pLabel}</div>
-              <div style="font-size:10px;color:#94a3b8">評価者: ${ev.evaluator_name||'未設定'}</div>
             </div>
-            <div class="rank-badge" style="background:${rankBg(ev.rank)}">${ev.rank}</div>
+            ${bigGap?`<div style="background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:900;color:#dc2626">要確認</div>`:''}
           </div>
-          <div style="padding:10px 14px">
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:8px">
-              <div class="info-row"><span>本評価点</span><span>${ev.base_score}点</span></div>
-              <div class="info-row" style="color:#64748b"><span>特殊能力補正</span><span>${ev.trait_score>=0?'+':''}${ev.trait_score}</span></div>
-              <div class="info-row" style="color:#ea580c"><span>時給アップ</span><span>${ev.pay_delta>0?'+'+ev.pay_delta+'円':'なし'}</span></div>
+          <div style="padding:10px 12px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px">
+              <div style="border-right:1.5px solid #e2e8f0;padding-right:6px">
+                <div style="font-size:10px;font-weight:900;color:#0369a1;text-align:center;margin-bottom:6px">🙋 自己評価</div>
+                ${cellSelf}
+              </div>
+              <div style="border-right:1.5px solid #e2e8f0;padding:0 6px">
+                <div style="font-size:10px;font-weight:900;color:#7c3aed;text-align:center;margin-bottom:6px">👔 店長評価</div>
+                ${cellMgr}
+              </div>
+              <div style="padding-left:6px">
+                <div style="font-size:10px;font-weight:900;color:#64748b;text-align:center;margin-bottom:6px">📊 比較</div>
+                ${cellDiff}
+              </div>
             </div>
-            ${evT.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${evT.map(t=>`<span style="border-radius:999px;border:1.5px solid #1e293b;padding:2px 8px;font-size:11px;font-weight:900;background:${(t.score||0)>0?'#fef9c3':'#fee2e2'}">${t.trait_name} ${(t.score||0)>0?'+':''}${t.score}</span>`).join('')}</div>`:''}
-            ${(ev.good_point||ev.improve_point||ev.next_goal)?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px">
-              ${ev.good_point?`<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#15803d">良い点</div><div style="font-size:11px;margin-top:1px">${ev.good_point}</div></div>`:''}
-              ${ev.improve_point?`<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#c2410c">改善点</div><div style="font-size:11px;margin-top:1px">${ev.improve_point}</div></div>`:''}
-              ${ev.next_goal?`<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#1d4ed8">次回目標</div><div style="font-size:11px;margin-top:1px">${ev.next_goal}</div></div>`:''}
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+              ${self?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${self.id}')">🙋 自己を編集</button>`:''}
+              ${mgr?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${mgr.id}')">👔 店長を編集</button>`:`<button class="btn btn-primary btn-sm" onclick="S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">＋ 店長評価を入力</button>`}
+              ${self?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${self.id}')">自己削除</button>`:''}
+              ${mgr?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${mgr.id}')">店長削除</button>`:''}
+            </div>
+            ${(mgr&&(mgr.good_point||mgr.improve_point||mgr.next_goal))?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px">
+              ${mgr.good_point?`<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#15803d">良い点</div><div style="font-size:11px;margin-top:1px">${mgr.good_point}</div></div>`:''}
+              ${mgr.improve_point?`<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#c2410c">改善点</div><div style="font-size:11px;margin-top:1px">${mgr.improve_point}</div></div>`:''}
+              ${mgr.next_goal?`<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#1d4ed8">次回目標</div><div style="font-size:11px;margin-top:1px">${mgr.next_goal}</div></div>`:''}
             </div>`:''}
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" onclick="startEdit('${ev.id}')">編集</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteEval('${ev.id}')">削除</button>
-            </div>
           </div>
         </div>`;
       });
