@@ -288,6 +288,30 @@ function render(){
   // filtered は後方互換のためグループ化前のリストを保持
   const filtered=preFiltered;
 
+  // 未対応(自己採点あり・店長評価なし)の件数と一覧
+  // ※フィルタは無視して全期間で集計する(タブに全体数を出したいので)
+  const allGroupMap=new Map();
+  evals.forEach(e=>{
+    const key=(e.staff_member_id||'')+'|'+(e.period_id||'');
+    if(!allGroupMap.has(key)){
+      allGroupMap.set(key,{
+        memberId:e.staff_member_id,periodId:e.period_id,storeId:e.store_id,
+        staffName:e.staff_members?.name||'未設定',
+        self:null,manager:null
+      });
+    }
+    const g=allGroupMap.get(key);
+    if(e.evaluation_type==='self'){
+      if(!g.self||new Date(e.created_at||0)>new Date(g.self.created_at||0))g.self=e;
+    }else{
+      if(!g.manager||new Date(e.created_at||0)>new Date(g.manager.created_at||0))g.manager=e;
+    }
+  });
+  const pendingList=Array.from(allGroupMap.values()).filter(g=>g.self&&!g.manager);
+  // 未対応リストは新しい自己採点順にソート
+  pendingList.sort((a,b)=>new Date(b.self?.created_at||0)-new Date(a.self?.created_at||0));
+  const pendingCount=pendingList.length;
+
   const rulebookHtml=`<div class="rulebook">
     <div style="font-size:14px;font-weight:900;margin-bottom:10px">📖 査定ルールブック</div>
     <div class="rule-block">
@@ -324,6 +348,7 @@ function render(){
     </div>
     <div class="tabs">
       <button class="tab ${tab==='list'?'active':''}" onclick="S.tab='list';render()">📋 一覧</button>
+      <button class="tab ${tab==='pending'?'active':''}" style="${pendingCount>0?'background:#fef3c7;border-color:#f59e0b;color:#92400e':''}" onclick="S.tab='pending';render()">📥 未対応${pendingCount>0?` <span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;margin-left:2px">${pendingCount}</span>`:''}</button>
       <button class="tab ${tab==='new'?'active':''}" onclick="S.tab='new';if(!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''}};render()">${editId?'✏️':'＋'} 入力</button>
       <button class="tab ${tab==='settings'?'active':''}" onclick="S.tab='settings';render()">⭐ 能力設定</button>
       <button class="tab ${tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
@@ -397,7 +422,8 @@ function render(){
             <div style="font-size:10px;font-weight:700;color:#ea580c;margin-top:2px">${mgr.pay_delta>0?'+'+mgr.pay_delta+'円':'—'}</div>
           </div>`:`
           <div style="text-align:center;padding:12px 0">
-            <div style="font-size:11px;color:#94a3b8;font-weight:700">未入力</div>
+            <div style="font-size:14px;color:#dc2626;font-weight:900">⚠️ 未入力</div>
+            <div style="font-size:9px;color:#dc2626;font-weight:700;margin-top:2px">店長評価待ち</div>
           </div>`;
         const cellDiff=`
           <div style="text-align:center">
@@ -406,10 +432,11 @@ function render(){
             ${bigGap?`<div style="font-size:9px;font-weight:900;color:#dc2626;margin-top:3px">⚠️ 要確認</div>`:''}
           </div>`;
 
-        html+=`<div class="ev-card">
-          <div class="ev-header">
+        const needsMgr=(g.self&&!g.manager);
+        html+=`<div class="ev-card" ${needsMgr?'style="border:2.5px solid #dc2626;box-shadow:0 3px 0 #dc2626"':''}>
+          <div class="ev-header" ${needsMgr?'style="background:linear-gradient(90deg,#fee2e2,#fed7aa)"':''}>
             <div style="flex:1">
-              <div style="font-size:16px;font-weight:900">${g.staffName}</div>
+              <div style="font-size:16px;font-weight:900">${g.staffName}${needsMgr?' <span style="font-size:11px;color:#dc2626;font-weight:900">📥 店長評価待ち</span>':''}</div>
               <div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${sName} / ${pLabel}</div>
             </div>
             ${bigGap?`<div style="background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:900;color:#dc2626">要確認</div>`:''}
@@ -431,7 +458,7 @@ function render(){
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
               ${self?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${self.id}')">🙋 自己を編集</button>`:''}
-              ${mgr?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${mgr.id}')">👔 店長を編集</button>`:`<button class="btn btn-primary btn-sm" onclick="S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">＋ 店長評価を入力</button>`}
+              ${mgr?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${mgr.id}')">👔 店長を編集</button>`:`<button class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:13px;padding:9px 16px" onclick="S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">👔 店長評価を入力する →</button>`}
               ${self?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${self.id}')">自己削除</button>`:''}
               ${mgr?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${mgr.id}')">店長削除</button>`:''}
             </div>
@@ -440,6 +467,48 @@ function render(){
               ${mgr.improve_point?`<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#c2410c">改善点</div><div style="font-size:11px;margin-top:1px">${mgr.improve_point}</div></div>`:''}
               ${mgr.next_goal?`<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#1d4ed8">次回目標</div><div style="font-size:11px;margin-top:1px">${mgr.next_goal}</div></div>`:''}
             </div>`:''}
+          </div>
+        </div>`;
+      });
+    }
+  }
+
+  // ===== 未対応(自己採点あり・店長評価なし) =====
+  if(tab==='pending'){
+    html+=`<div class="card" style="padding:14px;margin-bottom:10px;background:linear-gradient(135deg,#fef3c7,#fed7aa);border-color:#f59e0b">
+      <div style="font-size:15px;font-weight:900;color:#92400e;margin-bottom:5px">📥 店長評価の入力待ち</div>
+      <div style="font-size:12px;font-weight:700;color:#78350f">アルバイトさんから自己採点が届いていますが、店長評価がまだ入力されていない一覧です。<br>「👔 店長評価を入力する」ボタンを押すと、同じスタッフ・同じ期間で入力画面が自動セットされます。</div>
+    </div>`;
+
+    if(!pendingList.length){
+      html+=`<div class="card" style="padding:40px;text-align:center">
+        <div style="font-size:36px;margin-bottom:10px">🎉</div>
+        <div style="font-weight:900;color:#15803d;font-size:15px">未対応の自己採点はありません</div>
+        <div style="font-size:12px;color:#64748b;margin-top:8px">全て店長評価済みです、お疲れ様！</div>
+      </div>`;
+    }else{
+      pendingList.forEach(g=>{
+        const self=g.self;
+        const sName=(stores.find(s=>s.id===g.storeId)||{}).name||'未設定';
+        const pLabel=(periods.find(p=>p.id===g.periodId)||{}).label||'未設定';
+        const createdAt=self.created_at?new Date(self.created_at):null;
+        const dateStr=createdAt?`${createdAt.getMonth()+1}/${createdAt.getDate()} ${String(createdAt.getHours()).padStart(2,'0')}:${String(createdAt.getMinutes()).padStart(2,'0')}`:'';
+        html+=`<div class="ev-card" style="border:2.5px solid #f59e0b;box-shadow:0 3px 0 #f59e0b">
+          <div class="ev-header" style="background:linear-gradient(90deg,#fef3c7,#fde68a)">
+            <div style="flex:1">
+              <div style="font-size:16px;font-weight:900">${g.staffName}</div>
+              <div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${sName} / <strong style="color:#dc2626">${pLabel}</strong> ${dateStr?`<span style="color:#94a3b8">(自己採点: ${dateStr})</span>`:''}</div>
+            </div>
+            <div class="rank-badge" style="background:${rankBg(self.rank)}">${self.rank}</div>
+          </div>
+          <div style="padding:10px 14px">
+            <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px;margin-bottom:10px">
+              <div style="font-size:11px;font-weight:900;color:#0369a1;margin-bottom:4px">🙋 本人の自己採点</div>
+              <div class="info-row"><span>スコア</span><span style="font-weight:900">${self.base_score}点</span></div>
+              <div class="info-row"><span>ランク</span><span style="font-weight:900">${self.rank}</span></div>
+              <div class="info-row" style="color:#ea580c"><span>時給アップ想定</span><span>${self.pay_delta>0?'+'+self.pay_delta+'円':'なし'}</span></div>
+            </div>
+            <button class="btn" style="background:#dc2626;color:#fff;border-color:#dc2626;width:100%;font-size:14px;padding:12px" onclick="S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">👔 このスタッフに店長評価を入力する →</button>
           </div>
         </div>`;
       });
