@@ -94,7 +94,7 @@ async function loadAll(){
   try{
     const[st,pe,me,tr,ev,sec,it,rs]=await Promise.all([
       sb.from('stores').select('*').order('name'),
-      sb.from('evaluation_periods').select('*').eq('is_open',true).order('start_date',{ascending:false}),
+      sb.from('evaluation_periods').select('*').order('start_date',{ascending:false}),
       sb.from('staff_members').select('*').eq('active',true).order('name'),
       sb.from('trait_options').select('*').eq('is_active',true).order('sort_order'),
       sb.from('evaluations').select('*,staff_members(id,name,store_id),evaluation_item_scores(*),evaluation_traits(*)').order('created_at',{ascending:false}),
@@ -185,7 +185,19 @@ async function addMember(){
 }
 async function delMember(id){if(!confirm('削除しますか？'))return;await sb.from('staff_members').update({active:false}).eq('id',id);showToast('削除しました');await loadAll();}
 async function addPeriod(){const l=S.newPeriod.trim();if(!l)return;await sb.from('evaluation_periods').insert({label:l,is_open:true});S.newPeriod='';showToast('追加しました');await loadAll();}
-async function delPeriod(id){if(!confirm('削除しますか？'))return;await sb.from('evaluation_periods').update({is_open:false}).eq('id',id);showToast('非表示にしました');await loadAll();}
+async function togglePeriodOpen(id,newOpen){
+  const label=newOpen?'募集中':'閉鎖中';
+  if(!confirm(`この期間を「${label}」に切り替えますか？\n\n${newOpen?'✅ 自己採点で選択可能になります':'🔒 自己採点で選べなくなり、店長評価も入力不可になります(過去データは残ります)'}`))return;
+  await sb.from('evaluation_periods').update({is_open:newOpen}).eq('id',id);
+  showToast(newOpen?'募集中に切り替えました':'閉鎖中に切り替えました');
+  await loadAll();
+}
+async function delPeriod(id){
+  if(!confirm('⚠️ この期間を「閉鎖中」に切り替えますか？\n\n※データは削除されません。後で「募集中」に戻すこともできます。'))return;
+  await sb.from('evaluation_periods').update({is_open:false}).eq('id',id);
+  showToast('閉鎖中にしました');
+  await loadAll();
+}
 async function addTrait(){
   const n=S.newTrait.trim();if(!n)return;
   const mx=Math.max(0,...S.traits.map(t=>t.sort_order||0));
@@ -317,7 +329,13 @@ function render(){
       if(!g.manager||new Date(e.created_at||0)>new Date(g.manager.created_at||0))g.manager=e;
     }
   });
-  const pendingList=Array.from(allGroupMap.values()).filter(g=>g.self&&!g.manager);
+  const pendingList=Array.from(allGroupMap.values()).filter(g=>{
+    if(!g.self||g.manager)return false;
+    // 閉じられた期間(is_open=false)の未対応は除外
+    const period=periods.find(p=>p.id===g.periodId);
+    if(period&&!period.is_open)return false;
+    return true;
+  });
   // 未対応リストは新しい自己採点順にソート
   pendingList.sort((a,b)=>new Date(b.self?.created_at||0)-new Date(a.self?.created_at||0));
   const pendingCount=pendingList.length;
@@ -383,7 +401,7 @@ function render(){
       <input style="flex:1;min-width:140px" placeholder="名前・店舗で検索" value="${search}" oninput="S.search=this.value;render()">
       <select style="width:auto;min-width:130px" onchange="S.periodF=this.value;S._periodInited=true;render()">
         <option value="all" ${periodF==='all'?'selected':''}>全期間</option>
-        ${periods.map(p=>`<option value="${p.id}" ${periodF===p.id?'selected':''}>${p.label}</option>`).join('')}
+        ${periods.map(p=>`<option value="${p.id}" ${periodF===p.id?'selected':''}>${p.label}${!p.is_open?' 🔒':''}</option>`).join('')}
       </select>
       <select style="width:auto;min-width:100px" onchange="S.storeF=this.value;render()">
         <option value="all">全店舗</option>
@@ -442,11 +460,13 @@ function render(){
             ${bigGap?`<div style="font-size:9px;font-weight:900;color:#dc2626;margin-top:3px">⚠️ 要確認</div>`:''}
           </div>`;
 
-        const needsMgr=(g.self&&!g.manager);
-        html+=`<div class="ev-card" ${needsMgr?'style="border:2.5px solid #dc2626;box-shadow:0 3px 0 #dc2626"':''}>
+        const period=periods.find(p=>p.id===g.periodId);
+        const periodClosed=period&&!period.is_open;
+        const needsMgr=(g.self&&!g.manager&&!periodClosed);
+        html+=`<div class="ev-card" ${needsMgr?'style="border:2.5px solid #dc2626;box-shadow:0 3px 0 #dc2626"':(periodClosed?'style="opacity:0.85"':'')}>
           <div class="ev-header" ${needsMgr?'style="background:linear-gradient(90deg,#fee2e2,#fed7aa)"':''}>
             <div style="flex:1">
-              <div style="font-size:16px;font-weight:900">${g.staffName}${needsMgr?' <span style="font-size:11px;color:#dc2626;font-weight:900">📥 店長評価待ち</span>':''}</div>
+              <div style="font-size:16px;font-weight:900">${g.staffName}${needsMgr?' <span style="font-size:11px;color:#dc2626;font-weight:900">📥 店長評価待ち</span>':''}${periodClosed?' <span style="font-size:11px;color:#64748b;font-weight:900">🔒 閉鎖期間</span>':''}</div>
               <div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${sName} / ${pLabel}</div>
             </div>
             ${bigGap?`<div style="background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:900;color:#dc2626">要確認</div>`:''}
@@ -468,7 +488,7 @@ function render(){
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
               ${self?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${self.id}')">🙋 自己を編集</button>`:''}
-              ${mgr?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${mgr.id}')">👔 店長を編集</button>`:`<button class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:13px;padding:9px 16px" onclick="S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">👔 店長評価を入力する →</button>`}
+              ${mgr?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${mgr.id}')">👔 店長を編集</button>`:(periodClosed?`<span style="font-size:11px;color:#64748b;font-weight:700;padding:9px 12px;background:#f1f5f9;border-radius:8px;border:1.5px solid #cbd5e1">🔒 閉鎖期間のため入力不可</span>`:`<button class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:13px;padding:9px 16px" onclick="S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">👔 店長評価を入力する →</button>`)}
               ${self?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${self.id}')">自己削除</button>`:''}
               ${mgr?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${mgr.id}')">店長削除</button>`:''}
             </div>
@@ -542,10 +562,10 @@ function render(){
               <option value="">選択</option>
               ${stores.map(s=>`<option value="${s.id}" ${form.storeId===s.id?'selected':''}>${s.name}</option>`).join('')}
             </select></div>
-          <div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">評価期間</div>
+          <div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">評価期間 <span style="font-size:10px;color:#94a3b8;font-weight:700">(募集中のみ)</span></div>
             <select onchange="S.form.periodId=this.value;render()">
               <option value="">選択</option>
-              ${periods.map(p=>`<option value="${p.id}" ${form.periodId===p.id?'selected':''}>${p.label}</option>`).join('')}
+              ${periods.filter(p=>p.is_open||p.id===form.periodId).map(p=>`<option value="${p.id}" ${form.periodId===p.id?'selected':''}>${p.label}${!p.is_open?' 🔒':''}</option>`).join('')}
             </select></div>
           <div><div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:3px">評価者</div>
             <input value="${form.evaluator}" placeholder="評価者名" oninput="S.form.evaluator=this.value"></div>
@@ -723,7 +743,8 @@ function render(){
       </div>
       <div class="settings-panel">
         <h3>📅 評価期間</h3>
-        ${periods.map(p=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${p.label}</span><button class="btn btn-danger btn-sm" onclick="delPeriod('${p.id}')">削除</button></div>`).join('')}
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px;font-weight:700">🔓 = 募集中(自己採点で選べる) / 🔒 = 閉鎖(過去分・触れない)</div>
+        ${periods.map(p=>`<div class="master-row"><span style="flex:1;font-size:13px;font-weight:700">${p.label}</span><button class="btn btn-sm" style="background:${p.is_open?'#dcfce7':'#f1f5f9'};color:${p.is_open?'#15803d':'#64748b'};border-color:${p.is_open?'#86efac':'#cbd5e1'};margin-right:4px;font-size:11px" onclick="togglePeriodOpen('${p.id}',${!p.is_open})">${p.is_open?'🔓 募集中':'🔒 閉鎖中'}</button><button class="btn btn-danger btn-sm" onclick="delPeriod('${p.id}')">削除</button></div>`).join('')}
         <div style="display:flex;gap:6px;margin-top:8px">
           <input placeholder="例: 2026年5月期" value="${S.newPeriod}" oninput="S.newPeriod=this.value" style="flex:1">
           <button class="btn btn-primary btn-sm" onclick="addPeriod()">追加</button>
