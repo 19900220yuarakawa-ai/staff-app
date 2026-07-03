@@ -193,9 +193,30 @@ async function togglePeriodOpen(id,newOpen){
   await loadAll();
 }
 async function delPeriod(id){
-  if(!confirm('⚠️ この期間を「閉鎖中」に切り替えますか？\n\n※データは削除されません。後で「募集中」に戻すこともできます。'))return;
-  await sb.from('evaluation_periods').update({is_open:false}).eq('id',id);
-  showToast('閉鎖中にしました');
+  const period=S.periods.find(p=>p.id===id);
+  const label=period?.label||'この期間';
+  // 関連する評価データがあるかチェック
+  const relatedEvals=S.evals.filter(e=>e.period_id===id);
+  if(relatedEvals.length>0){
+    alert(
+      `❌ 「${label}」は削除できません。\n\n`+
+      `${relatedEvals.length}件の評価データが紐付いています。\n`+
+      `過去のデータを保護するため、削除は禁止されています。\n\n`+
+      `→ もう選ばせたくない場合は「🔒 閉鎖中」に切り替えてください。`
+    );
+    return;
+  }
+  if(!confirm(
+    `⚠️ 「${label}」を完全削除しますか？\n\n`+
+    `※この操作は取り消せません。\n`+
+    `※関連する評価データがあれば削除できません。`
+  ))return;
+  const{error}=await sb.from('evaluation_periods').delete().eq('id',id);
+  if(error){
+    alert('削除に失敗しました:\n'+error.message);
+    return;
+  }
+  showToast('削除しました');
   await loadAll();
 }
 async function addTrait(){
