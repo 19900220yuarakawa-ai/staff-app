@@ -261,6 +261,30 @@ function copyUrl(){
 function openDetail(key){S.detailKey=key;render();}
 function closeDetail(){S.detailKey=null;render();}
 
+// 設定タブへのアクセス制御
+const ADMIN_PW='1234';
+const PROTECTED_TABS=['settings','items','ranks','master'];
+let unlocked=false; // セッション中の解除状態
+function tryOpenTab(target){
+  if(PROTECTED_TABS.includes(target)&&!unlocked){
+    const input=prompt('🔒 このタブは管理者専用です\nパスワードを入力してください');
+    if(input===null)return; // キャンセル
+    if(input===ADMIN_PW){
+      unlocked=true;
+      showToast('🔓 ロック解除しました');
+      S.tab=target;
+      if(target==='new'&&!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};}
+      render();
+    }else{
+      showToast('❌ パスワードが違います',true);
+    }
+    return;
+  }
+  S.tab=target;
+  if(target==='new'&&!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};}
+  render();
+}
+
 function render(){
   const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF,periodF,sortBy,detailKey}=S;
   if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
@@ -399,13 +423,13 @@ function render(){
       </div>
     </div>
     <div class="tabs">
-      <button class="tab ${tab==='list'?'active':''}" onclick="S.tab='list';render()">📋 一覧</button>
-      <button class="tab ${tab==='pending'?'active':''}" style="${pendingCount>0?'background:#fef3c7;border-color:#f59e0b;color:#92400e':''}" onclick="S.tab='pending';render()">📥 未対応${pendingCount>0?` <span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;margin-left:2px">${pendingCount}</span>`:''}</button>
-      <button class="tab ${tab==='new'?'active':''}" onclick="S.tab='new';if(!S.editId){S.form={memberId:'',storeId:'',periodId:'',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''}};render()">${editId?'✏️':'＋'} 入力</button>
-      <button class="tab ${tab==='settings'?'active':''}" onclick="S.tab='settings';render()">⭐ 能力設定</button>
-      <button class="tab ${tab==='items'?'active':''}" onclick="S.tab='items';render()">📝 評価項目</button>
-      <button class="tab ${tab==='ranks'?'active':''}" onclick="S.tab='ranks';render()">🏆 ランク</button>
-      <button class="tab ${tab==='master'?'active':''}" onclick="S.tab='master';render()">⚙️ 基本設定</button>
+      <button class="tab ${tab==='list'?'active':''}" onclick="tryOpenTab('list')">📋 一覧</button>
+      <button class="tab ${tab==='pending'?'active':''}" style="${pendingCount>0?'background:#fef3c7;border-color:#f59e0b;color:#92400e':''}" onclick="tryOpenTab('pending')">📥 未対応${pendingCount>0?` <span style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;margin-left:2px">${pendingCount}</span>`:''}</button>
+      <button class="tab ${tab==='new'?'active':''}" onclick="tryOpenTab('new')">${editId?'✏️':'＋'} 入力</button>
+      <button class="tab ${tab==='settings'?'active':''}" onclick="tryOpenTab('settings')">${unlocked?'':'🔒 '}⭐ 能力設定</button>
+      <button class="tab ${tab==='items'?'active':''}" onclick="tryOpenTab('items')">${unlocked?'':'🔒 '}📝 評価項目</button>
+      <button class="tab ${tab==='ranks'?'active':''}" onclick="tryOpenTab('ranks')">${unlocked?'':'🔒 '}🏆 ランク</button>
+      <button class="tab ${tab==='master'?'active':''}" onclick="tryOpenTab('master')">${unlocked?'':'🔒 '}⚙️ 基本設定</button>
     </div>
   </div>`;
 
