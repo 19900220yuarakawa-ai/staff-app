@@ -210,8 +210,18 @@ async function addItem(){
 async function delItem(id){if(!confirm('削除しますか？'))return;await sb.from('eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
 async function updateRank(id,field,val){await sb.from('rank_settings').update({[field]:Number(val)}).eq('id',id);await loadAll();}
 
+// URLを安全に取得(location.originがnullの場合は本番URLをフォールバック)
+function getBaseUrl(){
+  const HYPERLINK_FALLBACK='https://hyouka.sanpo-works.com';
+  try{
+    if(location.origin&&location.origin!=='null'&&location.origin!=='')return location.origin;
+    if(location.protocol&&location.host&&location.protocol!=='file:')return location.protocol+'//'+location.host;
+    return HYPERLINK_FALLBACK;
+  }catch(e){return HYPERLINK_FALLBACK;}
+}
+
 function copyUrl(){
-  const url=location.origin+'/self.html';
+  const url=getBaseUrl()+'/self.html';
   navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>showToast(url));
 }
 
@@ -362,7 +372,7 @@ function render(){
     <div style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">📱 スタッフ自己採点ページ</div>
     <div style="font-size:12px;font-weight:700;color:#047857;margin-bottom:8px">このURLをスタッフに送るだけで自己採点できます</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;background:#fff;border:1.5px solid #059669;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;color:#0f172a;word-break:break-all">${location.origin}/self.html</div>
+      <div style="flex:1;background:#fff;border:1.5px solid #059669;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;color:#0f172a;word-break:break-all">${getBaseUrl()}/self.html</div>
       <button class="btn btn-sm" style="background:#059669;color:#fff;border-color:#059669;white-space:nowrap" onclick="copyUrl()">📋 コピー</button>
     </div>
   </div>`;
