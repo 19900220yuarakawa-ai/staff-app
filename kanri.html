@@ -72,7 +72,7 @@ let S={
   tab:'list',loading:true,
   stores:[],periods:[],members:[],traits:[],evals:[],
   sections:[],items:[],rankSettings:[],
-  search:'',storeF:'all',periodF:'all',sortBy:'diff',editId:null,
+  search:'',storeF:'all',periodF:'all',sortBy:'diff',editId:null,detailKey:null,
   form:{memberId:'',storeId:'',periodId:'',evaluator:'',vals:{},selTraits:[],good:'',improve:'',goal:''},
   newStore:'',newMemberName:'',newMemberStore:'',newPeriod:'',
   newTrait:'',newTraitScore:2,
@@ -258,8 +258,11 @@ function copyUrl(){
   navigator.clipboard.writeText(url).then(()=>showToast('URLをコピーしました！')).catch(()=>showToast(url));
 }
 
+function openDetail(key){S.detailKey=key;render();}
+function closeDetail(){S.detailKey=null;render();}
+
 function render(){
-  const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF,periodF,sortBy}=S;
+  const{tab,loading,stores,periods,members,traits,evals,sections,items,rankSettings,form,editId,search,storeF,periodF,sortBy,detailKey}=S;
   if(loading){document.getElementById('app').innerHTML=`<div style="text-align:center;padding:80px;font-weight:700;color:#64748b;font-size:16px">読み込み中...</div>`;return;}
 
   const base=calcScore(form.vals);
@@ -484,11 +487,13 @@ function render(){
         const period=periods.find(p=>p.id===g.periodId);
         const periodClosed=period&&!period.is_open;
         const needsMgr=(g.self&&!g.manager&&!periodClosed);
-        html+=`<div class="ev-card" ${needsMgr?'style="border:2.5px solid #dc2626;box-shadow:0 3px 0 #dc2626"':(periodClosed?'style="opacity:0.85"':'')}>
+        const groupKey=(g.memberId||'')+'|'+(g.periodId||'');
+        html+=`<div class="ev-card" style="${needsMgr?'border:2.5px solid #dc2626;box-shadow:0 3px 0 #dc2626':(periodClosed?'opacity:0.85':'')};cursor:pointer" onclick="openDetail('${groupKey}')">
           <div class="ev-header" ${needsMgr?'style="background:linear-gradient(90deg,#fee2e2,#fed7aa)"':''}>
             <div style="flex:1">
               <div style="font-size:16px;font-weight:900">${g.staffName}${needsMgr?' <span style="font-size:11px;color:#dc2626;font-weight:900">📥 店長評価待ち</span>':''}${periodClosed?' <span style="font-size:11px;color:#64748b;font-weight:900">🔒 閉鎖期間</span>':''}</div>
               <div style="font-size:11px;font-weight:700;color:#475569;margin-top:1px">${sName} / ${pLabel}</div>
+              <div style="font-size:10px;color:#0ea5e9;font-weight:700;margin-top:2px">👆 タップで詳細比較</div>
             </div>
             ${bigGap?`<div style="background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:900;color:#dc2626">要確認</div>`:''}
           </div>
@@ -507,11 +512,11 @@ function render(){
                 ${cellDiff}
               </div>
             </div>
-            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-              ${self?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${self.id}')">🙋 自己を編集</button>`:''}
-              ${mgr?`<button class="btn btn-ghost btn-sm" onclick="startEdit('${mgr.id}')">👔 店長を編集</button>`:(periodClosed?`<span style="font-size:11px;color:#64748b;font-weight:700;padding:9px 12px;background:#f1f5f9;border-radius:8px;border:1.5px solid #cbd5e1">🔒 閉鎖期間のため入力不可</span>`:`<button class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:13px;padding:9px 16px" onclick="S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">👔 店長評価を入力する →</button>`)}
-              ${self?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${self.id}')">自己削除</button>`:''}
-              ${mgr?`<button class="btn btn-danger btn-sm" onclick="deleteEval('${mgr.id}')">店長削除</button>`:''}
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" onclick="event.stopPropagation()">
+              ${self?`<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();startEdit('${self.id}')">🙋 自己を編集</button>`:''}
+              ${mgr?`<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();startEdit('${mgr.id}')">👔 店長を編集</button>`:(periodClosed?`<span style="font-size:11px;color:#64748b;font-weight:700;padding:9px 12px;background:#f1f5f9;border-radius:8px;border:1.5px solid #cbd5e1">🔒 閉鎖期間のため入力不可</span>`:`<button class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:13px;padding:9px 16px" onclick="event.stopPropagation();S.tab='new';S.editId=null;S.form={memberId:'${g.memberId||''}',storeId:'${g.storeId||''}',periodId:'${g.periodId||''}',evaluator:'',vals:emptyVals(),selTraits:[],good:'',improve:'',goal:''};render()">👔 店長評価を入力する →</button>`)}
+              ${self?`<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteEval('${self.id}')">自己削除</button>`:''}
+              ${mgr?`<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteEval('${mgr.id}')">店長削除</button>`:''}
             </div>
             ${(mgr&&(mgr.good_point||mgr.improve_point||mgr.next_goal))?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px">
               ${mgr.good_point?`<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:7px"><div style="font-size:9px;font-weight:900;color:#15803d">良い点</div><div style="font-size:11px;margin-top:1px">${mgr.good_point}</div></div>`:''}
@@ -788,6 +793,141 @@ function render(){
         <button class="btn btn-primary btn-sm" onclick="addMember()">追加</button>
       </div>
     </div>
+    </div>`;
+  }
+
+  // ===== 詳細比較モーダル =====
+  if(detailKey){
+    const [mId,pId]=detailKey.split('|');
+    const memberName=(members.find(m=>m.id===mId)||{}).name||(evals.find(e=>e.staff_member_id===mId)?.staff_members?.name)||'不明';
+    const period=periods.find(p=>p.id===pId);
+    const pLabel=period?.label||'不明';
+    // 該当する評価を取得
+    const relEvals=evals.filter(e=>e.staff_member_id===mId&&e.period_id===pId);
+    let selfEv=null,mgrEv=null;
+    relEvals.forEach(e=>{
+      if(e.evaluation_type==='self'){
+        if(!selfEv||new Date(e.created_at||0)>new Date(selfEv.created_at||0))selfEv=e;
+      }else{
+        if(!mgrEv||new Date(e.created_at||0)>new Date(mgrEv.created_at||0))mgrEv=e;
+      }
+    });
+    const sName=(stores.find(s=>s.id===(selfEv?.store_id||mgrEv?.store_id))||{}).name||'—';
+
+    // 項目別スコアマップ作成
+    const selfItemMap={},mgrItemMap={};
+    (selfEv?.evaluation_item_scores||[]).forEach(x=>selfItemMap[x.item_key]=Number(x.score));
+    (mgrEv?.evaluation_item_scores||[]).forEach(x=>mgrItemMap[x.item_key]=Number(x.score));
+
+    // 特殊能力
+    const selfTraits=(selfEv?.evaluation_traits||[]).map(t=>t.trait_name);
+    const mgrTraits=(mgrEv?.evaluation_traits||[]).map(t=>t.trait_name);
+
+    // 総合スコアセルHTML
+    const totalCell=(ev,label,color)=>ev?`
+      <div style="text-align:center">
+        <div style="font-size:11px;font-weight:900;color:${color};margin-bottom:4px">${label}</div>
+        <div class="rank-badge" style="background:${rankBg(ev.rank)};margin:0 auto 4px">${ev.rank}</div>
+        <div style="font-size:24px;font-weight:900;line-height:1">${ev.base_score}<span style="font-size:12px;color:#64748b;font-weight:700">点</span></div>
+        <div style="font-size:11px;font-weight:700;color:#ea580c;margin-top:3px">${ev.pay_delta>0?'時給 +'+ev.pay_delta+'円':'—'}</div>
+      </div>`:`
+      <div style="text-align:center;padding:16px 0">
+        <div style="font-size:11px;font-weight:900;color:${color};margin-bottom:4px">${label}</div>
+        <div style="font-size:12px;color:#94a3b8;font-weight:700">未入力</div>
+      </div>`;
+
+    // 差分
+    let diffHtml='';
+    if(selfEv&&mgrEv){
+      const dif=mgrEv.base_score-selfEv.base_score;
+      const dColor=dif>0?'#2563eb':(dif<0?'#dc2626':'#0f172a');
+      diffHtml=`<div style="text-align:center">
+        <div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:4px">差分</div>
+        <div style="height:32px"></div>
+        <div style="font-size:26px;font-weight:900;color:${dColor};line-height:1">${dif>0?'+':''}${dif}</div>
+        <div style="font-size:10px;color:${dColor};font-weight:700;margin-top:3px">${Math.abs(dif)>=10?'⚠️ 要確認':''}</div>
+      </div>`;
+    }else{
+      diffHtml=`<div style="text-align:center;padding:16px 0">
+        <div style="font-size:11px;font-weight:900;color:#64748b">差分</div>
+        <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-top:8px">両方必要</div>
+      </div>`;
+    }
+
+    // 項目別の表
+    let itemTable='';
+    sections.forEach(sec=>{
+      const secItems=items.filter(it=>it.section_id===sec.id);
+      if(!secItems.length)return;
+      itemTable+=`<div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:900;color:#0f172a;background:${sec.color||'#f1f5f9'};padding:6px 10px;border-radius:6px 6px 0 0;border:1.5px solid #cbd5e1;border-bottom:none">${sec.name}</div>
+        <div style="border:1.5px solid #cbd5e1;border-radius:0 0 6px 6px;overflow:hidden">
+          ${secItems.map((it,idx)=>{
+            const sSc=selfItemMap[it.id]!==undefined?selfItemMap[it.id]:null;
+            const mSc=mgrItemMap[it.id]!==undefined?mgrItemMap[it.id]:null;
+            const dif=(sSc!==null&&mSc!==null)?(mSc-sSc):null;
+            const warn=dif!==null&&Math.abs(dif)>=2;
+            return `<div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;padding:6px 10px;background:${idx%2?'#fafbfc':'#fff'};border-bottom:${idx===secItems.length-1?'none':'1px solid #e2e8f0'};align-items:center">
+              <span style="font-size:12px;font-weight:700">${it.label}</span>
+              <span style="font-size:14px;font-weight:900;text-align:center;color:${sSc===null?'#cbd5e1':'#0369a1'}">${sSc===null?'—':sSc}</span>
+              <span style="font-size:14px;font-weight:900;text-align:center;color:${mSc===null?'#cbd5e1':'#7c3aed'}">${mSc===null?'—':mSc}</span>
+              <span style="font-size:13px;font-weight:900;text-align:center;color:${dif===null?'#cbd5e1':(dif>0?'#2563eb':(dif<0?'#dc2626':'#0f172a'))}">${dif===null?'—':(dif>0?'+'+dif:''+dif)}${warn?' ⚠':''}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    });
+
+    html+=`<div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:20px 12px;overflow-y:auto" onclick="closeDetail()">
+      <div style="background:#fff;border:2.5px solid #1e293b;border-radius:16px;max-width:640px;width:100%;padding:0;overflow:hidden" onclick="event.stopPropagation()">
+        <div style="background:linear-gradient(90deg,#fef9c3,#e0f2fe);padding:14px 16px;border-bottom:2px solid #1e293b;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1">
+            <div style="font-size:18px;font-weight:900">${memberName}</div>
+            <div style="font-size:12px;font-weight:700;color:#475569;margin-top:2px">${sName} / ${pLabel}</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="closeDetail()" style="flex-shrink:0">✕ 閉じる</button>
+        </div>
+        <div style="padding:14px">
+
+          <div style="background:linear-gradient(135deg,#f8fafc,#e0f2fe);border:2px solid #1e293b;border-radius:12px;padding:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:900;color:#0f172a;margin-bottom:8px">📊 総合スコア</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px">${totalCell(selfEv,'🙋 自己評価','#0369a1')}</div>
+              <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px">${totalCell(mgrEv,'👔 店長評価','#7c3aed')}</div>
+              <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px">${diffHtml}</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:14px">
+            <div style="font-size:12px;font-weight:900;color:#0f172a;margin-bottom:6px">📝 評価項目別</div>
+            <div style="display:grid;grid-template-columns:1fr 60px 60px 60px;gap:4px;padding:6px 10px;background:#0f172a;color:#fff;border-radius:6px 6px 0 0;font-size:10px;font-weight:900">
+              <span>項目</span>
+              <span style="text-align:center">🙋 自己</span>
+              <span style="text-align:center">👔 店長</span>
+              <span style="text-align:center">差</span>
+            </div>
+            ${itemTable||'<div style="padding:14px;text-align:center;color:#94a3b8;font-size:12px;font-weight:700">項目データがありません</div>'}
+          </div>
+
+          ${(selfTraits.length||mgrTraits.length)?`<div style="margin-bottom:14px">
+            <div style="font-size:12px;font-weight:900;color:#0f172a;margin-bottom:6px">⭐ 特殊能力</div>
+            <div style="background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:8px;padding:10px">
+              <div style="margin-bottom:6px"><span style="font-size:11px;font-weight:900;color:#0369a1">🙋 自己:</span> ${selfTraits.length?selfTraits.map(t=>`<span style="display:inline-block;background:#fef08a;border:1.5px solid #1e293b;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:900;margin:2px 2px 0 4px">${t}</span>`).join(''):'<span style="font-size:11px;color:#94a3b8;margin-left:4px">なし</span>'}</div>
+              <div><span style="font-size:11px;font-weight:900;color:#7c3aed">👔 店長:</span> ${mgrTraits.length?mgrTraits.map(t=>`<span style="display:inline-block;background:#fef08a;border:1.5px solid #1e293b;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:900;margin:2px 2px 0 4px">${t}</span>`).join(''):'<span style="font-size:11px;color:#94a3b8;margin-left:4px">なし</span>'}</div>
+            </div>
+          </div>`:''}
+
+          ${(mgrEv&&(mgrEv.good_point||mgrEv.improve_point||mgrEv.next_goal))?`<div>
+            <div style="font-size:12px;font-weight:900;color:#0f172a;margin-bottom:6px">💬 店長コメント</div>
+            <div style="display:grid;gap:6px">
+              ${mgrEv.good_point?`<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:8px 10px"><div style="font-size:10px;font-weight:900;color:#15803d">✅ 良い点</div><div style="font-size:12px;margin-top:2px">${mgrEv.good_point}</div></div>`:''}
+              ${mgrEv.improve_point?`<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:8px;padding:8px 10px"><div style="font-size:10px;font-weight:900;color:#c2410c">📈 改善点</div><div style="font-size:12px;margin-top:2px">${mgrEv.improve_point}</div></div>`:''}
+              ${mgrEv.next_goal?`<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;padding:8px 10px"><div style="font-size:10px;font-weight:900;color:#1d4ed8">🎯 次回目標</div><div style="font-size:12px;margin-top:2px">${mgrEv.next_goal}</div></div>`:''}
+            </div>
+          </div>`:''}
+
+        </div>
+      </div>
     </div>`;
   }
 
