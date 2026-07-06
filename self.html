@@ -57,6 +57,7 @@ let memberId='',periodId='',storeId='';
 let vals={},selTraits=[];
 let step='form'; // form | done
 let resultData=null;
+let submitting=false; // 送信中フラグ(二重送信防止)
 
 function rankBg(r){return{SS:'#e9d5ff',S:'#fde047','A+':'#fed7aa',A:'#bbf7d0',B:'#bfdbfe',C:'#e2e8f0',D:'#fecaca'}[r]||'#e2e8f0';}
 function rankMsg(r){return{SS:'完璧です！最高です！🎉',S:'すごい！Sランク達成！✨','A+':'あと少しでSランク！',A:'良い調子です！',B:'まだまだ伸びしろあり！',C:'一つずつ改善しよう！',D:'基礎から頑張ろう！'}[r]||'お疲れ様でした！';}
@@ -90,15 +91,42 @@ async function load(){
 }
 
 async function submit(){
+  // 二重送信防止
+  if(submitting)return;
   if(!memberId||!periodId){toast('名前と評価期間を選んでください',true);return;}
+
+  // 既存の自己採点があるかチェック(あれば削除して上書き)
+  let existingIds=[];
+  try{
+    const{data:existing}=await sb.from('evaluations')
+      .select('id')
+      .eq('staff_member_id',memberId)
+      .eq('period_id',periodId)
+      .eq('evaluation_type','self');
+    if(existing&&existing.length>0){
+      existingIds=existing.map(x=>x.id);
+    }
+  }catch(e){/* エラー時は続行 */}
+
+  // 送信開始
+  submitting=true;
+  render(); // ボタン無効化を反映
+
   const score=calcScore();
   const rObj=rankOf(score);
-  const tScore=selTraits.reduce((s,t)=>s+(D.traits.find(o=>o.name===t)?.score||0),0);
   try{
+    // 既存レコードがあれば先に削除(項目スコアも一緒に)
+    if(existingIds.length>0){
+      await sb.from('evaluation_item_scores').delete().in('evaluation_id',existingIds);
+      await sb.from('evaluation_traits').delete().in('evaluation_id',existingIds);
+      await sb.from('evaluations').delete().in('id',existingIds);
+    }
+
+    // 新しく登録
     const{data,error}=await sb.from('evaluations').insert({
       staff_member_id:memberId,store_id:storeId,period_id:periodId,
       evaluation_type:'self',evaluator_name:'自己採点',
-      base_score:score,trait_score:tScore,total_score:score+tScore,
+      base_score:score,trait_score:0,total_score:score,
       rank:rObj.rank,pay_delta:rObj.pay_up,
     }).select().single();
     if(error)throw error;
@@ -109,15 +137,16 @@ async function submit(){
       return{evaluation_id:eid,section_key:sec?.name||'',item_key:item_id,item_label:it?.label||'',score:Number(sc)};
     });
     if(rows.length)await sb.from('evaluation_item_scores').insert(rows);
-    if(selTraits.length){
-      await sb.from('evaluation_traits').insert(selTraits.map(name=>{
-        const f=D.traits.find(o=>o.name===name);
-        return{evaluation_id:eid,trait_option_id:f?.id||null,trait_name:name,score:Number(f?.score||0)};
-      }));
-    }
-    resultData={score,rank:rObj.rank,payUp:rObj.pay_up,tScore,name:D.members.find(m=>m.id===memberId)?.name||''};
+
+    const wasOverwrite=existingIds.length>0;
+    resultData={score,rank:rObj.rank,payUp:rObj.pay_up,name:D.members.find(m=>m.id===memberId)?.name||'',overwrite:wasOverwrite};
+    submitting=false;
     step='done';render();
-  }catch(e){toast('送信エラー: '+e.message,true);}
+  }catch(e){
+    submitting=false;
+    render();
+    toast('送信エラー: '+e.message,true);
+  }
 }
 
 function reset(){
@@ -143,15 +172,12 @@ function render(){
           <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:900;padding:5px 0;border-bottom:1px solid #e2e8f0">
             <span>本評価点</span><span>${resultData.score}点</span>
           </div>
-          ${resultData.tScore!==0?`<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:#64748b;padding:4px 0">
-            <span>特殊能力補正</span><span>${resultData.tScore>=0?'+':''}${resultData.tScore}</span>
-          </div>`:''}
           <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;color:#ea580c;padding:4px 0">
             <span>時給アップ基準</span><span>${resultData.payUp>0?'+'+resultData.payUp+'円':'なし'}</span>
           </div>
         </div>
-        <div style="background:#dcfce7;border:2px solid #16a34a;border-radius:12px;padding:12px;font-size:13px;font-weight:700;color:#15803d;margin-bottom:4px">
-          ✅ 店長に結果が送信されました
+        <div style="background:${resultData.overwrite?'#dbeafe':'#dcfce7'};border:2px solid ${resultData.overwrite?'#3b82f6':'#16a34a'};border-radius:12px;padding:12px;font-size:13px;font-weight:700;color:${resultData.overwrite?'#1e40af':'#15803d'};margin-bottom:4px">
+          ${resultData.overwrite?'🔄 前回の採点を上書き保存しました':'✅ 店長に結果が送信されました'}
         </div>
         <button class="btn-retry" onclick="reset()">もう一度採点する</button>
       </div>
@@ -223,18 +249,8 @@ function render(){
         </div>`;
       }).join('')}
 
-      ${D.traits.length?`<div style="border:2px solid #1e293b;border-radius:12px;background:#e0f2fe;padding:12px;margin-bottom:14px">
-        <div style="font-size:13px;font-weight:900;margin-bottom:8px">特殊能力（あてはまるものをタップ）</div>
-        <div style="display:flex;flex-wrap:wrap;gap:7px">
-          ${D.traits.map(t=>{
-            const on=selTraits.includes(t.name);
-            return`<button style="border:2px solid ${on?'#1e293b':'#94a3b8'};border-radius:999px;padding:7px 14px;font-size:13px;font-weight:900;cursor:pointer;background:${on?'#fef08a':'#fff'};color:${on?'#0f172a':'#64748b'}" onclick="const i=selTraits.indexOf('${t.name}');if(i>=0)selTraits.splice(i,1);else selTraits.push('${t.name}');render()">${t.name} <span style="color:${t.score>0?'#15803d':'#dc2626'}">${t.score>0?'+':''}${t.score}</span></button>`;
-          }).join('')}
-        </div>
-      </div>`:''}
-
-      <button class="btn-send" onclick="submit()">📤 採点を送信する</button>
-      <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">送信すると店長に結果が届きます</div>
+      <button class="btn-send" onclick="submit()" ${submitting?'disabled style="opacity:0.5;pointer-events:none;background:#94a3b8"':''}>${submitting?'⏳ 送信中... しばらくお待ちください':'📤 採点を送信する'}</button>
+      <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">${submitting?'※このまま画面を閉じないでください':'送信すると店長に結果が届きます'}</div>
     </div>
   </div>`;
 
