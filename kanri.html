@@ -241,6 +241,26 @@ async function addItem(){
   S.newItemLabel='';showToast('追加しました');await loadAll();
 }
 async function delItem(id){if(!confirm('削除しますか？'))return;await sb.from('eval_items').update({is_active:false}).eq('id',id);showToast('削除しました');await loadAll();}
+async function editItem(id,currentLabel){
+  const newLabel=prompt('項目名を編集してください',currentLabel);
+  if(newLabel===null)return;
+  const trimmed=newLabel.trim();
+  if(!trimmed){showToast('項目名は空にできません',true);return;}
+  if(trimmed===currentLabel)return;
+  await sb.from('eval_items').update({label:trimmed}).eq('id',id);
+  showToast('項目名を変更しました');
+  await loadAll();
+}
+async function editSection(id,currentName){
+  const newName=prompt('セクション名を編集してください',currentName);
+  if(newName===null)return;
+  const trimmed=newName.trim();
+  if(!trimmed){showToast('セクション名は空にできません',true);return;}
+  if(trimmed===currentName)return;
+  await sb.from('eval_sections').update({name:trimmed}).eq('id',id);
+  showToast('セクション名を変更しました');
+  await loadAll();
+}
 async function updateRank(id,field,val){await sb.from('rank_settings').update({[field]:Number(val)}).eq('id',id);await loadAll();}
 
 // URLを安全に取得(location.originがnullの場合は本番URLをフォールバック)
@@ -739,11 +759,15 @@ function render(){
       return`<div class="section-card">
         <div class="section-card-header" style="background:${sec.color}">
           <span>${sec.name} <span style="font-size:10px;color:#475569;font-weight:500">${si.length}項目・最大${si.length*4}点</span></span>
-          <button class="btn btn-danger btn-sm" onclick="delSection('${sec.id}')">削除</button>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" onclick="editSection('${sec.id}','${sec.name.replace(/'/g,"\\'")}',this)">✏️ 編集</button>
+            <button class="btn btn-danger btn-sm" onclick="delSection('${sec.id}')">削除</button>
+          </div>
         </div>
         <div class="section-card-body">
           ${si.map(it=>`<div class="eval-item-row">
             <span style="flex:1;font-size:13px;font-weight:700">${it.label}</span>
+            <button class="btn btn-ghost btn-sm" onclick="editItem('${it.id}','${it.label.replace(/'/g,"\\'")}',this)">✏️ 編集</button>
             <button class="btn btn-danger btn-sm" onclick="delItem('${it.id}')">削除</button>
           </div>`).join('')}
           ${si.length===0?`<div style="color:#94a3b8;font-size:12px">項目がありません</div>`:''}
