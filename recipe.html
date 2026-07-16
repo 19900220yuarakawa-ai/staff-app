@@ -257,8 +257,14 @@ async function setupInitialData() {
   } catch(e) { console.warn("初期データセットアップ:", e); }
 }
 
-setupInitialData().then(() => window.appInit && window.appInit());
-</script>
+if (localStorage.getItem('sanpo_initialized') === 'v1') {
+  window.appInit && window.appInit();
+} else {
+  setupInitialData().then(() => {
+    localStorage.setItem('sanpo_initialized', 'v1');
+    window.appInit && window.appInit();
+  });
+}</script>
 
 <script>
 const TABS = [
@@ -573,17 +579,17 @@ function rateColorSet(rate) {
   return { bg:'#FFEBE9', col:'#791F1F', label:'🔴 高め' };
 }
 
-function subscribeRecipes() {
-  if (S.unsubRecipes) S.unsubRecipes();
-  S.unsubRecipes = window.fb.onSnapshot(
-    window.fb.collection(window.fb.db, "recipes"),
-    (snap) => {
-      S.recipes = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-      render();
-    },
-    (err) => { console.error(err); showToast("レシピの読み込みに失敗", true); }
-  );
-}
+async function subscribeRecipes() {
+  // リアルタイム購読をやめて、1回だけ取得（起動高速化）
+  try {
+    const snap = await window.fb.getDocs(window.fb.collection(window.fb.db, "recipes"));
+    S.recipes = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    render();
+  } catch (err) {
+    console.error(err);
+    showToast("レシピの読み込みに失敗", true);
+  }
+
 
 // 画像を圧縮する関数
 async function compressImage(file, maxSize = 1280, quality = 0.8) {
@@ -989,7 +995,7 @@ function doLogin() {
     S.authed = true;
     S.pwInput = '';
     S.sc = S.warningSeen ? 'stores' : 'warning';
-    subscribeRecipes();
+    //subscribeRecipes();
     render();
   } else {
     S.pwError = 'パスワードが違います';
@@ -2907,13 +2913,17 @@ function bind() {
       }
       else if (a === 'agree') { S.warningSeen = true; S.sc = 'stores'; render(); }
       else if (a === 'logout') { if(confirm('ログアウトしますか?'))doLogout(); }
-      else if (a === 'ssel') { 
+  else if (a === 'ssel') { 
         S.currentStore = v; 
         S.tab = (v==='shumai'||v==='__all__') ? 'all' : 'grill'; 
         S.visibleCount = 20;
         S.sortMode = 'default';
         S.sc = 'menu'; 
         render(); 
+        // レシピをまだ取得してなければ、ここで取得（起動高速化）
+        if (!S.recipes || S.recipes.length === 0) {
+          subscribeRecipes();
+        }
       }
       else if (a === 'bs') { 
         // ing-manage画面からは管理画面に戻る
