@@ -687,11 +687,16 @@ async function saveRecipe(form, editorName) {
     };
     if (form.editId) {
       await window.fb.updateDoc(window.fb.doc(window.fb.db, "recipes", form.editId), data);
+      // ローカルのS.recipesも即座に更新（リロードなしで反映）
+      const idx = S.recipes.findIndex(r => r.id === form.editId);
+      if (idx >= 0) S.recipes[idx] = { ...S.recipes[idx], ...data, id: form.editId };
     } else {
       data.createdAt = new Date().toISOString();
       data.createdBy = editorName;
       const newRef = window.fb.doc(window.fb.collection(window.fb.db, "recipes"));
       await window.fb.setDoc(newRef, data);
+      // ローカルのS.recipesにも即座に追加
+      S.recipes.push({ id: newRef.id, ...data });
     }
     showToast("保存しました");
   } catch (e) {
@@ -710,6 +715,9 @@ async function toggleInUse(recId) {
     : [...inUse, S.currentStore];
   try {
     await window.fb.updateDoc(window.fb.doc(window.fb.db, "recipes", recId), { inUse: newInUse });
+    // ローカルも即座に更新
+    x.inUse = newInUse;
+    render();
   } catch (e) { console.error(e); showToast("更新に失敗", true); }
 }
 
@@ -752,7 +760,14 @@ async function archiveRecipe(recId, recName) {
       archived: true,
       archivedAt: new Date().toISOString()
     });
+    // ローカルも即座に更新
+    const idx = S.recipes.findIndex(r => r.id === recId);
+    if (idx >= 0) {
+      S.recipes[idx].archived = true;
+      S.recipes[idx].archivedAt = new Date().toISOString();
+    }
     showToast("アーカイブしました");
+    render();
   } catch (e) { console.error(e); showToast("アーカイブ失敗", true); }
 }
 
@@ -762,7 +777,14 @@ async function restoreRecipe(recId) {
       archived: false,
       archivedAt: null
     });
+    // ローカルも即座に更新
+    const idx = S.recipes.findIndex(r => r.id === recId);
+    if (idx >= 0) {
+      S.recipes[idx].archived = false;
+      S.recipes[idx].archivedAt = null;
+    }
     showToast("復元しました");
+    render();
   } catch (e) { console.error(e); showToast("復元失敗", true); }
 }
 
@@ -771,7 +793,10 @@ async function permanentDeleteRecipe(recId, recName) {
   if (!confirm(`本当に「${recName}」を完全削除しますか?\n最終確認です。`)) return;
   try {
     await window.fb.deleteDoc(window.fb.doc(window.fb.db, "recipes", recId));
+    // ローカルも即座に削除
+    S.recipes = S.recipes.filter(r => r.id !== recId);
     showToast("完全削除しました");
+    render();
   } catch (e) { console.error(e); showToast("削除失敗", true); }
 }
 
@@ -1237,7 +1262,10 @@ ${showBackupWarn ? `<div style="background:${bs.level==='danger'?'#FCEBEB':'#FAE
 <span style="flex:1">前回のバックアップから<strong>${bs.days}日</strong>経過。管理画面からバックアップしてください</span>
 </div>` : ''}
 <div style="padding:14px 18px 24px">
-<h2 style="font-size:18px;font-weight:500;margin:8px 0 4px">店舗を選択</h2>
+<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px">
+<h2 style="font-size:18px;font-weight:500;margin:0">店舗を選択</h2>
+<button data-a="refresh-recipes" style="background:#fff;border:1px solid #5DCAA5;color:#085041;border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:500">🔄 最新に更新</button>
+</div>
 <p style="font-size:12px;color:#666;margin:0 0 16px">レシピを見たい店舗をタップ</p>
 
 <div data-a="ssel" data-x="__all__" style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;border:1px solid #5DCAA5;background:#E1F5EE;cursor:pointer;margin-bottom:16px">
@@ -2913,6 +2941,13 @@ function bind() {
       }
       else if (a === 'agree') { S.warningSeen = true; S.sc = 'stores'; render(); }
       else if (a === 'logout') { if(confirm('ログアウトしますか?'))doLogout(); }
+      else if (a === 'refresh-recipes') {
+        // レシピを強制的に最新に再取得
+        S.recipes = [];
+        subscribeRecipes().then(() => {
+          showToast('最新のレシピを取得しました');
+        });
+      }
   else if (a === 'ssel') { 
         S.currentStore = v; 
         S.tab = (v==='shumai'||v==='__all__') ? 'all' : 'grill'; 
